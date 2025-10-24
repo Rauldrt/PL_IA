@@ -13,7 +13,7 @@ import {z} from 'genkit';
 const SentimentAnalysisInputSchema = z.object({
   text: z.string().describe('The text to analyze for sentiment.'),
 });
-export type SentimentAnalysisInput = z.infer<typeof SentimentAnalysisInputSchema>;
+type SentimentAnalysisInput = z.infer<typeof SentimentAnalysisInputSchema>;
 
 const SentimentAnalysisOutputSchema = z.object({
   sentiment: z
@@ -23,7 +23,7 @@ const SentimentAnalysisOutputSchema = z.object({
     ),
   score: z.number().describe('The sentiment score of the text from -1 to 1.'),
 });
-export type SentimentAnalysisOutput = z.infer<typeof SentimentAnalysisOutputSchema>;
+type SentimentAnalysisOutput = z.infer<typeof SentimentAnalysisOutputSchema>;
 
 export async function analyzeSentiment(
   input: SentimentAnalysisInput

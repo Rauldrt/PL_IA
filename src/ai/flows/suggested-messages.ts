@@ -15,7 +15,7 @@ const SuggestedMessagesOutputSchema = z.object({
     z.string().describe('A suggested message to start a conversation.')
   ).describe('An array of suggested messages.')
 });
-export type SuggestedMessagesOutput = z.infer<typeof SuggestedMessagesOutputSchema>;
+type SuggestedMessagesOutput = z.infer<typeof SuggestedMessagesOutputSchema>;
 
 export async function getSuggestedMessages(): Promise<SuggestedMessagesOutput> {
   const prompt = ai.definePrompt({

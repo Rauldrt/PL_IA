@@ -8,17 +8,17 @@ const MessageSchema = z.object({
   content: z.string(),
 });
 
-export const ChatInputSchema = z.object({
+const ChatInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history.'),
   message: z.string().describe('The latest user message.'),
   sentiment: z.string().optional().describe('The sentiment of the user\'s message.'),
 });
-export type ChatInput = z.infer<typeof ChatInputSchema>;
+type ChatInput = z.infer<typeof ChatInputSchema>;
 
-export const ChatOutputSchema = z.object({
+const ChatOutputSchema = z.object({
   response: z.string().describe('The AI\'s response.'),
 });
-export type ChatOutput = z.infer<typeof ChatOutputSchema>;
+type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
 export async function chat(input: ChatInput): Promise<ChatOutput> {
   const prompt = ai.definePrompt({
