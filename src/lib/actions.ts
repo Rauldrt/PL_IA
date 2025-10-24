@@ -6,30 +6,6 @@ import { chat } from '@/ai/flows/chat';
 import { getSuggestedMessages as getSuggestions } from '@/ai/flows/suggested-messages';
 import type { Message, ChatInput, SentimentAnalysisOutput, SuggestedMessagesOutput } from './types';
 
-const loginSchema = z.object({
-  username: z.string().min(1, 'El usuario es requerido.'),
-  password: z.string().min(1, 'La contraseña es requerida.'),
-});
-
-export async function login(
-  prevState: { message: string },
-  formData: FormData
-) {
-  const parsed = loginSchema.safeParse(Object.fromEntries(formData.entries()));
-
-  if (!parsed.success) {
-    return { message: 'Entrada inválida.', success: false };
-  }
-
-  const { username, password } = parsed.data;
-
-  // Hardcoded credentials for demonstration
-  if (username === 'usuario' && password === 'contraseña') {
-    return { message: 'Inicio de sesión exitoso.', success: true };
-  }
-
-  return { message: 'Usuario o contraseña incorrectos.', success: false };
-}
 
 export async function sendMessage(history: Message[], newMessage: string) {
   if (!newMessage.trim()) {
