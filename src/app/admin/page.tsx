@@ -125,20 +125,32 @@ export default function AdminPage() {
         setUrl('');
         setFileName('');
       })
-      .catch((serverError) => {
-          const permissionError = new FirestorePermissionError({
-            path: knowledgeCollection.path,
-            operation: 'create',
-            requestResourceData: knowledgeData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-          
-          // Also show a generic error to the user via toast
-          toast({
-              title: 'Error de Permiso',
-              description: 'No tienes permiso para agregar fuentes de conocimiento.',
-              variant: 'destructive',
-          });
+      .catch((error) => {
+        // Log the actual error to the console for debugging
+        console.error("Error adding document: ", error);
+
+        // Check if it's a permission error specifically
+        if (error.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: knowledgeCollection.path,
+              operation: 'create',
+              requestResourceData: knowledgeData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            
+            toast({
+                title: 'Error de Permiso',
+                description: 'No tienes permiso para agregar fuentes de conocimiento.',
+                variant: 'destructive',
+            });
+        } else {
+            // For any other kind of error
+            toast({
+                title: 'Error al Guardar',
+                description: error.message || 'No se pudo guardar la fuente de conocimiento.',
+                variant: 'destructive',
+            });
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -259,5 +271,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    
