@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, useFirestore } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AuthChatHeader() {
   const router = useRouter();
@@ -17,16 +19,29 @@ export default function AuthChatHeader() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (user && firestore) {
-        const adminRoleDoc = doc(firestore, `roles_admin/${user.uid}`);
+        const adminRoleDocRef = doc(firestore, `roles_admin/${user.uid}`);
         try {
-            const docSnap = await getDoc(adminRoleDoc);
-            setIsAdmin(docSnap.exists());
+          const docSnap = await getDoc(adminRoleDocRef);
+          setIsAdmin(docSnap.exists());
         } catch (error) {
-            console.error("Error checking admin status:", error);
+            // This is likely a permission error on the read itself.
+            const permissionError = new FirestorePermissionError({
+                path: adminRoleDocRef.path,
+                operation: 'get',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+
+            // Inform user via toast, but the developer overlay will have the rich error.
+            toast({
+              title: 'Error de Permiso',
+              description: 'No se pudo verificar el estado de administrador.',
+              variant: 'destructive',
+            });
             setIsAdmin(false);
         }
       } else {
@@ -34,10 +49,10 @@ export default function AuthChatHeader() {
       }
     };
     checkAdminStatus();
-  }, [user, firestore]);
+  }, [user, firestore, toast]);
 
   const handleLogout = async () => {
-    if(auth) {
+    if (auth) {
       await signOut(auth);
       router.replace('/');
     }
@@ -52,7 +67,7 @@ export default function AuthChatHeader() {
       <div className="flex items-center gap-4">
         {isAdmin && (
           <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-             <ShieldCheck size={16} /> Admin
+            <ShieldCheck size={16} /> Admin
           </Link>
         )}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
