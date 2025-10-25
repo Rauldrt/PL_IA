@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getSuggestedMessages } from '@/lib/actions';
+import { getSuggestedMessages } from '@/ai/flows/suggested-messages';
 import { chat } from '@/ai/flows/chat';
 import type { Message } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -71,12 +71,20 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
 
   const saveMessage = async (message: Omit<Message, 'id'>) => {
+    // If there is no session, we cannot save. This should be handled by handleSendMessage.
     if (!messagesCollectionRef) return;
+
+    // We get the reference to the session document to update the lastMessage field
+    const sessionDocRef = doc(firestore!, 'users', userId, 'sessions', sessionId!);
+    
     try {
       await addDoc(messagesCollectionRef, {
         ...message,
         timestamp: serverTimestamp(),
       });
+       // Update last message in session
+       await setDoc(sessionDocRef, { lastMessage: message.content.substring(0, 40) }, { merge: true });
+
     } catch (error: any) {
        if (error.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
@@ -97,9 +105,8 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     if (!trimmedMessage || isLoading) return;
 
     let currentSessionId = sessionId;
-    // If there's no active session, create one first.
     if (!currentSessionId) {
-        setIsLoading(true);
+        setIsLoading(true); // Show loading while creating session
         currentSessionId = await createNewSession();
         if (!currentSessionId) {
             setIsLoading(false);
@@ -109,6 +116,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     
     const userMessages = messages || [];
     const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
+    // The saveMessage function now depends on a valid session, which we ensured above.
     await saveMessage(newUserMessage);
     
     setInput('');
@@ -127,24 +135,21 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     } catch (e) {
       console.error('Chat error:', e);
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
-      // Optionally remove the user message from UI if saving failed, though it's already saved.
     } finally {
       setIsLoading(false);
     }
   };
   
   // --- Effects ---
-
   const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
-    if (!messages || messages.length > 0) return;
+    // Only fetch suggestions if there are no messages
+    if (messages && messages.length > 0) return;
 
     setIsLoadingSuggestions(true);
     try {
-      const result = await getSuggestedMessages({knowledge: knowledgeContent});
-      if (result.messages) {
+      const result = await getSuggestions({knowledge: knowledgeContent});
+       if (result.messages) {
         setSuggested(result.messages);
-      } else if (result.error) {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error fetching suggested messages:', error);
@@ -197,12 +202,13 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages, isLoading, isLoadingMessages]);
+  }, [messages, isLoading]);
 
   const hasMessages = messages && messages.length > 0;
-  const isChatReady = !isLoadingMessages && sessionId;
-  const showWelcome = !isLoadingMessages && !hasMessages;
-  const showInput = !isLoadingMessages;
+  // Show welcome screen if there is no session ID and messages are not being loaded.
+  const showWelcome = !sessionId && !isLoadingMessages;
+  // Always show input unless suggestions are loading for the first time.
+  const showInput = !isLoadingSuggestions;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -210,7 +216,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-               {isLoadingMessages && !showWelcome && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
+               {isLoadingMessages && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
 
               {showWelcome && (
                 <WelcomeScreen
@@ -220,9 +226,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
                 />
               )}
               
-              {isChatReady && messages && (
-                messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)
-              )}
+              {hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
 
               {isLoading && hasMessages && (
                 <div className="flex items-start gap-4 py-4 justify-start">
@@ -251,3 +255,5 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     </div>
   );
 }
+
+    
