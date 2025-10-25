@@ -59,10 +59,11 @@ export async function signup(
   };
   batch.set(userDocRef, userData);
 
-  // Create admin role document
+  // By default, make the first user an admin.
+  // In a real app, you'd have a more robust way to manage roles.
   const adminRoleRef = firestore.collection('roles_admin').doc(userRecord.uid);
   const adminData = {
-      isAdmin: true,
+      isAdmin: true, // Make first user admin
       assignedAt: new Date().toISOString()
   };
   batch.set(adminRoleRef, adminData);
