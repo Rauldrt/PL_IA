@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -10,8 +10,16 @@ export function useIsAdmin(userId: string | undefined) {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const firestore = useFirestore();
+  const { user } = useUser(); // Get the full user object
 
   useEffect(() => {
+    // Hardcode admin access for a specific email
+    if (user?.email === 'rauldrt5@gmail.com') {
+      setIsAdmin(true);
+      setIsLoading(false);
+      return;
+    }
+
     if (!userId || !firestore) {
       setIsAdmin(false);
       setIsLoading(false);
@@ -45,7 +53,7 @@ export function useIsAdmin(userId: string | undefined) {
     };
 
     checkAdminStatus();
-  }, [userId, firestore]);
+  }, [userId, firestore, user]);
 
   return { isAdmin, isLoading };
 }
