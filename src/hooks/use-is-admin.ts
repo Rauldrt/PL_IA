@@ -10,16 +10,8 @@ export function useIsAdmin(userId: string | undefined) {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const firestore = useFirestore();
-  const { user } = useUser(); // Get the full user object
 
   useEffect(() => {
-    // Hardcode admin access for a specific email
-    if (user?.email === 'rauldrt5@gmail.com') {
-      setIsAdmin(true);
-      setIsLoading(false);
-      return;
-    }
-
     if (!userId || !firestore) {
       setIsAdmin(false);
       setIsLoading(false);
@@ -34,12 +26,17 @@ export function useIsAdmin(userId: string | undefined) {
         if (docSnap.exists() && docSnap.data()?.isAdmin === true) {
           setIsAdmin(true);
         } else {
-          setIsAdmin(false);
+          // Check for the hardcoded admin email as a fallback.
+          // Note: This check is client-side only and won't affect security rules.
+          const { user } = useUser.getState();
+          if (user?.email === 'rauldrt5@gmail.com') {
+             setIsAdmin(true);
+          } else {
+             setIsAdmin(false);
+          }
         }
       } catch (error: any) {
         setIsAdmin(false);
-        // This is likely a permission error if the rules are set up correctly.
-        // We emit it to be caught by the global error handler.
         if (error.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: adminRoleDocRef.path,
@@ -53,7 +50,16 @@ export function useIsAdmin(userId: string | undefined) {
     };
 
     checkAdminStatus();
-  }, [userId, firestore, user]);
+  }, [userId, firestore]);
 
   return { isAdmin, isLoading };
 }
+
+// Helper function to get latest user state outside of React component lifecycle
+useUser.getState = () => {
+    const context = useContext(FirebaseContext);
+    if (context === undefined) {
+      return { user: null };
+    }
+    return { user: context.user };
+};
