@@ -141,9 +141,10 @@
           "type": "string",
           "description": "National Identity Document number."
         },
-        "esFiscal": {
-          "type": "boolean",
-          "description": "Whether the person is a designated fiscal."
+        "rol": {
+          "type": "string",
+          "description": "The role of the fiscal.",
+          "enum": ["GENERAL", "MESA"]
         },
         "escuela": {
           "type": "string",
@@ -160,7 +161,8 @@
       },
       "required": [
         "apellidoYNombre",
-        "dni"
+        "dni",
+        "rol"
       ]
     }
   },

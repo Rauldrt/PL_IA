@@ -9,17 +9,17 @@ import { MessageCircle, UserPlus, Trash2, ClipboardPaste, LoaderCircle } from 'l
 import AdminGuard from '@/components/auth/AdminGuard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
-import { collection, writeBatch } from 'firebase/firestore';
+import { collection, writeBatch, doc } from 'firebase/firestore';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Fiscal {
     apellidoYNombre: string;
     dni: string;
-    esFiscal: boolean;
+    rol: 'GENERAL' | 'MESA';
     escuela: string;
     mesa: string;
     telefono: string;
@@ -30,7 +30,7 @@ function FiscalesPageContent() {
     const [formState, setFormState] = useState<Fiscal>({
         apellidoYNombre: '',
         dni: '',
-        esFiscal: true,
+        rol: 'MESA',
         escuela: '',
         mesa: '',
         telefono: '',
@@ -41,11 +41,15 @@ function FiscalesPageContent() {
     const firestore = useFirestore();
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
+        const { name, value } = e.target;
         setFormState(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : value,
+            [name]: value,
         }));
+    };
+
+    const handleRolChange = (value: 'GENERAL' | 'MESA') => {
+        setFormState(prev => ({...prev, rol: value}));
     };
 
     const handleAddManual = () => {
@@ -61,7 +65,7 @@ function FiscalesPageContent() {
         setFormState({
             apellidoYNombre: '',
             dni: '',
-            esFiscal: true,
+            rol: 'MESA',
             escuela: '',
             mesa: '',
             telefono: '',
@@ -74,11 +78,12 @@ function FiscalesPageContent() {
         rows.forEach((row, index) => {
             const columns = row.split('\t');
             if (columns.length >= 6) {
-                const [apellidoYNombre, dni, esFiscalStr, escuela, mesa, telefono] = columns;
+                const [apellidoYNombre, dni, rol, escuela, mesa, telefono] = columns;
+                const parsedRol = rol.trim().toUpperCase() === 'GENERAL' ? 'GENERAL' : 'MESA';
                 nuevosFiscales.push({
                     apellidoYNombre: apellidoYNombre.trim(),
                     dni: dni.trim(),
-                    esFiscal: esFiscalStr.trim().toLowerCase() === 'si' || esFiscalStr.trim().toLowerCase() === 'true',
+                    rol: parsedRol,
                     escuela: escuela.trim(),
                     mesa: mesa.trim(),
                     telefono: telefono.trim(),
@@ -117,10 +122,9 @@ function FiscalesPageContent() {
         setIsSaving(true);
         try {
             const batch = writeBatch(firestore);
-            const fiscalesCollection = collection(firestore, 'fiscales');
             
             fiscales.forEach(fiscal => {
-                const docRef = collection(firestore, 'fiscales').doc();
+                const docRef = doc(collection(firestore, 'fiscales'));
                 batch.set(docRef, fiscal);
             });
 
@@ -193,18 +197,24 @@ function FiscalesPageContent() {
                                             <Label htmlFor="mesa">Mesa</Label>
                                             <Input name="mesa" value={formState.mesa} onChange={handleFormChange} />
                                         </div>
-                                        <div className="space-y-2 col-span-2">
+                                        <div className="space-y-2">
                                             <Label htmlFor="telefono">Teléfono</Label>
                                             <Input name="telefono" value={formState.telefono} onChange={handleFormChange} />
                                         </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="rol">Rol</Label>
+                                            <Select name="rol" value={formState.rol} onValueChange={handleRolChange}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Seleccionar rol" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="MESA">Mesa</SelectItem>
+                                                    <SelectItem value="GENERAL">General</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center space-x-2 pt-2">
-                                        <Checkbox id="esFiscal" name="esFiscal" checked={formState.esFiscal} onCheckedChange={(checked) => setFormState(prev => ({...prev, esFiscal: !!checked}))} />
-                                        <label htmlFor="esFiscal" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                            Es Fiscal
-                                        </label>
-                                    </div>
-                                    <Button onClick={handleAddManual} className="w-full">
+                                    <Button onClick={handleAddManual} className="w-full mt-4">
                                         <UserPlus className="mr-2 h-4 w-4" />
                                         Agregar a la lista
                                     </Button>
@@ -214,7 +224,7 @@ function FiscalesPageContent() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Pegar desde Planilla</CardTitle>
-                                    <CardDescription>Pega aquí los datos con las columnas: Apellido y Nombre, DNI, Fiscal (si/no), Escuela, Mesa, Telefono.</CardDescription>
+                                    <CardDescription>Pega aquí los datos con las columnas: Apellido y Nombre, DNI, Rol (GENERAL/MESA), Escuela, Mesa, Telefono.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <Textarea
@@ -256,7 +266,7 @@ function FiscalesPageContent() {
                                                 <TableHead>DNI</TableHead>
                                                 <TableHead>Escuela</TableHead>
                                                 <TableHead>Mesa</TableHead>
-                                                <TableHead>Es Fiscal</TableHead>
+                                                <TableHead>Rol</TableHead>
                                                 <TableHead>Acción</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -267,7 +277,7 @@ function FiscalesPageContent() {
                                                     <TableCell>{fiscal.dni}</TableCell>
                                                     <TableCell>{fiscal.escuela}</TableCell>
                                                     <TableCell>{fiscal.mesa}</TableCell>
-                                                    <TableCell>{fiscal.esFiscal ? 'Sí' : 'No'}</TableCell>
+                                                    <TableCell>{fiscal.rol}</TableCell>
                                                     <TableCell>
                                                         <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(index)}>
                                                             <Trash2 className="h-4 w-4 text-destructive" />
