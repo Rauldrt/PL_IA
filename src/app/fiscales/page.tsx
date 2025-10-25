@@ -5,7 +5,7 @@ import AuthChatHeader from '@/components/auth/ChatHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { MessageCircle, UserPlus, Trash2, LoaderCircle } from 'lucide-react';
+import { MessageCircle, UserPlus, Trash2, LoaderCircle, FileDown } from 'lucide-react';
 import AuthGuard from '@/components/auth/AuthGuard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +14,8 @@ import { collection, doc, deleteDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useIsAdmin } from '@/hooks/use-is-admin';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 
 interface Fiscal {
@@ -57,6 +59,45 @@ function FiscalesPageContent() {
 
     const { data: savedFiscales, isLoading: isLoadingFiscales } = useCollection<Fiscal>(fiscalesCollectionRef);
     
+    const handleExportAndSharePDF = () => {
+        if (!savedFiscales || savedFiscales.length === 0) {
+            toast({
+                title: "No hay datos",
+                description: "No hay fiscales guardados para exportar.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        const doc = new jsPDF();
+
+        // Añadir un título al PDF
+        doc.setFontSize(18);
+        doc.text("Listado de Fiscales", 14, 22);
+        
+        const tableColumn = ["Apellido y Nombre", "DNI", "Escuela", "Mesa", "Teléfono"];
+        const tableRows: (string | null)[][] = [];
+
+        savedFiscales.forEach(fiscal => {
+            const fiscalData = [
+                fiscal.apellidoYNombre,
+                fiscal.dni,
+                fiscal.escuela,
+                fiscal.mesa,
+                fiscal.telefono,
+            ];
+            tableRows.push(fiscalData);
+        });
+
+        (doc as any).autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 30,
+        });
+
+        doc.save('fiscales.pdf');
+    };
+
     const handleDeleteSavedFiscal = async (fiscalId: string) => {
         if (!firestore) return;
         
@@ -93,7 +134,7 @@ function FiscalesPageContent() {
 
     const formatWhatsAppLink = (phone: string) => {
         let cleanedPhone = phone.replace(/[^0-9]/g, '');
-        if (!cleanedPhone.startsWith('54')) {
+        if (cleanedPhone.length > 8 && !cleanedPhone.startsWith('54')) {
             cleanedPhone = `54${cleanedPhone}`;
         }
         return `https://wa.me/${cleanedPhone}`;
@@ -128,12 +169,18 @@ function FiscalesPageContent() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                      { !isAdminLoading && isAdmin && (
-                                         <Link href="/fiscales/cargar" passHref>
-                                            <Button>
-                                                <UserPlus className="mr-2 h-4 w-4" />
-                                                Cargar Nuevos Fiscales
+                                        <>
+                                            <Button onClick={handleExportAndSharePDF}>
+                                                <FileDown className="mr-2 h-4 w-4" />
+                                                Exportar PDF
                                             </Button>
-                                        </Link>
+                                            <Link href="/fiscales/cargar" passHref>
+                                                <Button>
+                                                    <UserPlus className="mr-2 h-4 w-4" />
+                                                    Cargar Nuevos Fiscales
+                                                </Button>
+                                            </Link>
+                                        </>
                                      )}
                                     <Link href="/chat" passHref>
                                         <Button variant="outline">
