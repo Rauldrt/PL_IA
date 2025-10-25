@@ -15,7 +15,7 @@ export default function LoginPage() {
             </div>
           </div>
           <h1 className="mt-8 font-headline text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Bienvenido a Conecta IA
+            Bienvenido a PLib_IA
           </h1>
           <p className="mt-4 text-base text-muted-foreground">
             Inicia sesión o crea una cuenta para conversar con tu agente de IA.

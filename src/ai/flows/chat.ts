@@ -26,7 +26,7 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
     name: 'chatPrompt',
     input: { schema: ChatInputSchema },
     output: { schema: ChatOutputSchema },
-    prompt: `Eres un agente de IA experto llamado Conecta IA. Tu propósito es ayudar a los usuarios con sus consultas.
+    prompt: `Eres un agente de IA experto llamado PLib_IA. Tu propósito es ayudar a los usuarios con sus consultas.
 
   Responde basándote únicamente en el siguiente contexto y base de conocimiento:
   {{{knowledge}}}

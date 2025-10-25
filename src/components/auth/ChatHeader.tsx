@@ -27,7 +27,7 @@ export default function AuthChatHeader() {
     <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 sm:px-6">
       <Link href="/chat" className="flex items-center gap-2 sm:gap-3">
         <Logo width={40} height={40} />
-        <h1 className="font-headline text-lg sm:text-xl font-bold text-foreground">Conecta IA</h1>
+        <h1 className="font-headline text-lg sm:text-xl font-bold text-foreground">PLib_IA</h1>
       </Link>
       <div className="flex items-center gap-2 sm:gap-4">
         <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">

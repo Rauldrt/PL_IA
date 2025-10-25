@@ -4,7 +4,7 @@ import { FirebaseClientProvider } from '@/firebase';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Conecta IA',
+  title: 'PLib_IA',
   description: 'Interactúa con tu agente de IA personalizado.',
 };
 
