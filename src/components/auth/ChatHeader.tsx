@@ -30,15 +30,13 @@ export default function AuthChatHeader() {
         <h1 className="font-headline text-xl font-bold text-foreground">Conecta IA</h1>
       </Link>
       <div className="flex items-center gap-4">
+        <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+            <Briefcase size={16} /> Fiscales
+        </Link>
         {!isAdminLoading && isAdmin && (
-            <>
-                <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-                    <Briefcase size={16} /> Fiscales
-                </Link>
-                <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-                    <ShieldCheck size={16} /> Admin
-                </Link>
-            </>
+            <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                <ShieldCheck size={16} /> Admin
+            </Link>
         )}
         {user?.email && (
             <span className="text-sm text-muted-foreground">{user.email}</span>
