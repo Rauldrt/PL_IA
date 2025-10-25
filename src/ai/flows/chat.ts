@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -54,6 +55,14 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
     },
     async (input) => {
       const { output } = await prompt(input);
+      
+      // Update session's last message after getting a response.
+      if (ai.internal.state().flow?.context?.firebase?.sessionDocRef) {
+        const sessionRef = ai.internal.state().flow!.context.firebase.sessionDocRef;
+        const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
+        await sessionRef.update({ lastMessage: userMessage });
+      }
+
       return output!;
     }
   );

@@ -2,12 +2,21 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  timestamp?: any;
+}
+
+export type Session = {
+  id: string;
+  startTime: any;
+  userId: string;
+  lastMessage?: string;
 }
 
 export type ChatInput = {
-  history: Message[];
+  history: Omit<Message, 'id'>[];
   message: string;
   sentiment?: string;
+  knowledge?: string;
 };
 
 export type ChatOutput = {
