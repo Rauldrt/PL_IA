@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, LoaderCircle } from 'lucide-react';
@@ -32,43 +32,41 @@ function SubmitButton({ isSignup }: { isSignup: boolean }) {
 
 export default function LoginForm() {
   const [isSignup, setIsSignup] = React.useState(false);
-  const [loginState, loginAction] = React.useActionState(login, { message: '', success: false });
-  const [signupState, signupAction] = React.useActionState(signup, { message: '', success: false });
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
 
-  React.useEffect(() => {
-    if (loginState.success) {
-      const form = document.querySelector('form') as HTMLFormElement;
-      const formData = new FormData(form);
+  const handleLogin = async (prevState: any, formData: FormData) => {
+    const result = await login(prevState, formData);
+    if (result.success) {
       const email = formData.get('email') as string;
       const password = formData.get('password') as string;
-      
-      if(email && password) {
-        signInWithEmailAndPassword(auth, email, password)
-        .then(() => {
-          toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
-          router.push('/chat');
-        })
-        .catch((error) => {
-          toast({ title: 'Error de inicio de sesión', description: 'Email o contraseña incorrectos.', variant: 'destructive' });
-        });
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
+        router.push('/chat');
+      } catch (error) {
+        toast({ title: 'Error de inicio de sesión', description: 'Email o contraseña incorrectos.', variant: 'destructive' });
       }
-
-    } else if (loginState.message && !loginState.success && loginState.message !== '') {
-      toast({ title: 'Error de inicio de sesión', description: loginState.message, variant: 'destructive' });
+    } else if (result.message) {
+      toast({ title: 'Error de inicio de sesión', description: result.message, variant: 'destructive' });
     }
-  }, [loginState, router, toast, auth]);
-
-  React.useEffect(() => {
-    if (signupState.success) {
+    return result;
+  };
+  
+  const handleSignup = async (prevState: any, formData: FormData) => {
+    const result = await signup(prevState, formData);
+    if (result.success) {
       toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
       setIsSignup(false);
-    } else if (signupState.message) {
-      toast({ title: 'Error de registro', description: signupState.message, variant: 'destructive' });
+    } else if (result.message) {
+      toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
     }
-  }, [signupState, toast]);
+    return result;
+  };
+
+  const [loginState, loginAction] = useActionState(handleLogin, { message: '', success: false });
+  const [signupState, signupAction] = useActionState(handleSignup, { message: '', success: false });
 
   return (
     <Card className="w-full">
