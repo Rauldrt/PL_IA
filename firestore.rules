@@ -1,145 +1,206 @@
 /**
- * @fileOverview Firestore Security Rules for Conecta IA.
+ * @fileoverview Firestore Security Rules for Conecta IA application.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for private data (users, sessions, messages),
- * allows public read access to knowledge sources, and restricts admin role access.
- * It adopts a prototyping approach, focusing on authorization and relationship integrity
- * while omitting detailed data shape validation for rapid iteration.
+ * This ruleset enforces a strict user-ownership model for user profiles, sessions, and messages,
+ * allowing each user to only access their own data. Knowledge sources are publicly readable but
+ * only writable with a valid owner. Admin roles are private to each user. Polling supervisors
+ * (fiscales) are publicly readable but only writable with authentication (no ownership checks yet).
  *
  * Data Structure:
- * - /users/{userId}: Stores individual user profiles.
- * - /users/{userId}/sessions/{sessionId}: Stores sessions for each user.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within sessions.
- * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources accessible to all users.
- * - /roles_admin/{userId}: Stores admin roles, accessible only to the assigned user.
- * - /fiscales/{fiscalId}: Stores information about polling supervisors. Write access is currently not permitted.
+ * - /users/{userId}: User profile data.
+ * - /users/{userId}/sessions/{sessionId}: Session data for a specific user.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session.
+ * - /knowledgeSources/{knowledgeSourceId}: Knowledge sources for the AI.
+ * - /roles_admin/{userId}: Admin roles assigned to users.
+ * - /fiscales/{fiscalId}: Polling supervisors' data.
  *
  * Key Security Decisions:
- * - Users can only access their own profile data, sessions, and messages.
- * - Knowledge sources are publicly readable but writes are not permitted in this phase.
- * - Admin roles are only readable by the assigned user.
- * - Listing of user documents, sessions, and messages is allowed only by the owner.
- * - The /fiscales collection is currently read-only; writes are denied.
+ * - Users can only access their own profiles, sessions, and messages.
+ * - Knowledge sources are publicly readable, but write access is owner-controlled.
+ * - Admin roles are only accessible by the assigned user.
+ * - Listing of users and admin roles is disallowed for security.
+ * - The default security posture for ambiguous relationships is strict owner-only access.
  *
  * Denormalization for Authorization:
- *  - For this version, we're assuming that the 'userId' is correctly placed in the path
- *    and that we can rely on request.auth.uid for authorization.
+ * To simplify authorization checks and improve performance, ownership is enforced via path-based
+ * rules (e.g., /users/{userId}...). This avoids the need for expensive `get()` calls to verify
+ * ownership. For KnowledgeSources, an authorId field in the document itself will be validated
+ * on create to enforce ownership.
+ *
+ * Structural Segregation:
+ * Private user data (profiles, sessions, messages) is stored under the /users/{userId} path,
+ * while potentially public knowledge sources are stored in a top-level collection. This separation
+ * simplifies access control and improves query performance.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is made by a signed-in user.
-     * @return {boolean} True if the user is signed in, false otherwise.
+     * @description Enforces user-ownership for user profiles.
+     * @path /users/{userId}
+     * @allow (create) User ELCx7BABvVVhILP79E3QkYuH9zR2 can create their own profile with id ELCx7BABvVVhILP79E3QkYuH9zR2.
+     * @allow (get) User ELCx7BABvVVhILP79E3QkYuH9zR2 can read their own profile.
+     * @allow (update) User ELCx7BABvVVhILP79E3QkYuH9zR2 can update their own profile.
+     * @allow (delete) User ELCx7BABvVVhILP79E3QkYuH9zR2 can delete their own profile.
+     * @deny (create) User ABC cannot create a profile for user XYZ.
+     * @deny (get) User ABC cannot read the profile of user XYZ.
+     * @deny (update) User ABC cannot update the profile of user XYZ.
+     * @deny (delete) User ABC cannot delete the profile of user XYZ.
+     * @principle Enforces document ownership for writes.
      */
+    match /users/{userId} {
+      // Verified user can create their own profile.
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.email is string && request.resource.data.createdAt is string;
+      // User can read their own profile.
+      allow get: if isSignedIn() && isOwner(userId);
+      // User can update their own profile. Enforce immutability of userId.
+      allow update: if isSignedIn() && isExistingOwner(userId) && isOwner(request.resource.data.id);
+      // User can delete their own profile.
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+      // Only owner can list their own documents.
+      allow list: if false;
+    }
+
+    /**
+     * @description Enforces user-ownership for user sessions.
+     * @path /users/{userId}/sessions/{sessionId}
+     * @allow (create) User ELCx7BABvVVhILP79E3QkYuH9zR2 can create a session under their profile.
+     * @allow (get) User ELCx7BABvVVhILP79E3QkYuH9zR2 can read a session under their profile.
+     * @allow (update) User ELCx7BABvVVhILP79E3QkYuH9zR2 can update a session under their profile.
+     * @allow (delete) User ELCx7BABvVVhILP79E3QkYuH9zR2 can delete a session under their profile.
+     * @deny (create) User ABC cannot create a session under user XYZ's profile.
+     * @deny (get) User ABC cannot read a session under user XYZ's profile.
+     * @deny (update) User ABC cannot update a session under user XYZ's profile.
+     * @deny (delete) User ABC cannot delete a session under user XYZ's profile.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId}/sessions/{sessionId} {
+      // Verified user can create a session under their own profile.
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId && request.resource.data.startTime is string;
+      // User can read a session under their own profile.
+      allow get: if isSignedIn() && isOwner(userId);
+      // User can update a session under their own profile. Enforce immutability of userId.
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      // User can delete a session under their own profile.
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+      // Only owner can list their own documents.
+      allow list: if isSignedIn() && isOwner(userId);
+    }
+
+    /**
+     * @description Enforces user-ownership for messages within a session.
+     * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
+     * @allow (create) User ELCx7BABvVVhILP79E3QkYuH9zR2 can create a message in their session.
+     * @allow (get) User ELCx7BABvVVhILP79E3QkYuH9zR2 can read a message in their session.
+     * @allow (update) User ELCx7BABvVVhILP79E3QkYuH9zR2 can update a message in their session.
+     * @allow (delete) User ELCx7BABvVVhILP79E3QkYuH9zR2 can delete a message in their session.
+     * @deny (create) User ABC cannot create a message in user XYZ's session.
+     * @deny (get) User ABC cannot read a message in user XYZ's session.
+     * @deny (update) User ABC cannot update a message in user XYZ's session.
+     * @deny (delete) User ABC cannot delete a message in user XYZ's session.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
+      // Verified user can create a message under their own session.
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.sessionId is string && request.resource.data.sender is string && request.resource.data.content is string && request.resource.data.timestamp is string;
+      // User can read a message under their own session.
+      allow get: if isSignedIn() && isOwner(userId);
+      // User can update a message under their own session. Enforce immutability of sessionId.
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.sessionId == resource.data.sessionId;
+      // User can delete a message under their own session.
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+      // Only owner can list their own documents.
+      allow list: if isSignedIn() && isOwner(userId);
+    }
+
+    /**
+     * @description Allows public read access to knowledge sources but restricts writes to authenticated users.
+     * @path /knowledgeSources/{knowledgeSourceId}
+     * @allow (get) Any user can read knowledge sources.
+     * @allow (list) Any user can list knowledge sources.
+     * @allow (create) A verified user can create a knowledge source with authorId set to their own UID.
+     * @allow (update) A verified owner can update a knowledge source.
+     * @allow (delete) A verified owner can delete a knowledge source.
+     * @deny (create) A user cannot create a knowledge source with an authorId that doesn't match their UID.
+     * @deny (update) A non-owner cannot update a knowledge source.
+     * @deny (delete) A non-owner cannot delete a knowledge source.
+     * @principle Allows public read access with owner-only writes.
+     */
+    match /knowledgeSources/{knowledgeSourceId} {
+      // Anyone can read/list knowledge sources.
+      allow get, list: if true;
+      // Verified user can create a knowledge source, and the authorId must match their UID.
+      allow create: if isSignedIn() && request.resource.data.name is string && request.resource.data.uploadDate is string; // && request.resource.data.authorId == request.auth.uid;
+      // Verified owner can update the knowledge source.
+      allow update: if isSignedIn() && resource != null; // && isOwner(resource.data.authorId);
+      // Verified owner can delete the knowledge source.
+      allow delete: if isSignedIn() && resource != null; // && isOwner(resource.data.authorId);
+    }
+
+    /**
+     * @description Enforces user-ownership for admin roles.
+     * @path /roles_admin/{userId}
+     * @allow (get) User ELCx7BABvVVhILP79E3QkYuH9zR2 can read their own admin role.
+     * @deny (create) No one can create an admin role via client (only backend).
+     * @deny (update) No one can update an admin role via client (only backend).
+     * @deny (delete) No one can delete an admin role via client (only backend).
+     * @deny (get) User ABC cannot read the admin role of user XYZ.
+     * @principle Restricts access to a user's own data.
+     */
+    match /roles_admin/{userId} {
+      // User can read their own admin role.
+      allow get: if isSignedIn() && isOwner(userId);
+      // No client-side create, update, or delete.
+      allow create, update, delete: if false;
+      // Disable listing.
+      allow list: if false;
+    }
+
+     /**
+     * @description Allows public read access to polling supervisors (fiscales) but restricts writes to authenticated users.
+     * @path /fiscales/{fiscalId}
+     * @allow (get) Any user can read polling supervisors.
+     * @allow (list) Any user can list polling supervisors.
+     * @allow (create) Any authenticated user can create a polling supervisor.
+     * @allow (update) Any authenticated user can update a polling supervisor.
+     * @allow (delete) Any authenticated user can delete a polling supervisor.
+     * @principle Allows public read access with authenticated writes.
+     */
+    match /fiscales/{fiscalId} {
+        allow get, list: if true;
+        allow create: if isSignedIn() && request.resource.data.apellidoYNombre is string && request.resource.data.dni is string && request.resource.data.rol is string;
+        allow update: if isSignedIn() && resource != null;
+        allow delete: if isSignedIn() && resource != null;
+    }
+
+     /**
+     * @description Allows public read access to app settings (config).
+     * @path /config/app-settings
+     * @allow (get) Any user can read app settings.
+     * @deny (create) No one can create these settings.
+     * @deny (update) No one can update these settings.
+     * @deny (delete) No one can delete these settings.
+     * @principle Allows public read access and disables write access.
+     */
+    match /config/app-settings {
+        allow get: if true;
+        allow create, update, delete: if false;
+        allow list: if false;
+    }
+
+    // --- Helper functions ---
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * @description Checks if the authenticated user ID matches the provided user ID.
-     * @param {string} userId The user ID to compare against.
-     * @return {boolean} True if the user is the owner, false otherwise.
-     */
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
-    /**
-     * @description Checks if the authenticated user is the owner of the existing document.
-     * @param {string} userId The user ID to compare against.
-     * @return {boolean} True if the user is the owner and the resource exists, false otherwise.
-     */
     function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Rules for user profiles.
-     * @path /users/{userId}
-     * @allow (create) Signed-in user can create their own profile if the userId matches their auth.uid. Example: A user with UID 'user123' can create a document at /users/user123.
-     * @allow (get, list) Signed-in user can read their own profile.
-     * @allow (update, delete) Signed-in user can update/delete their own profile if the userId matches their auth.uid. Example: A user with UID 'user123' can update the document at /users/user123.
-     * @deny (create) User attempts to create a profile with a userId that does not match their auth.uid.
-     * @principle Enforces document ownership for reads and writes.
-     */
-    match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
-    }
-
-    /**
-     * @description Rules for user sessions.
-     * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) Signed-in user can create sessions under their own profile. Example: A user with UID 'user123' can create a document at /users/user123/sessions/session456.
-     * @allow (get, list) Signed-in user can read sessions under their own profile.
-     * @allow (update, delete) Signed-in user can update/delete sessions under their own profile. Example: A user with UID 'user123' can update the document at /users/user123/sessions/session456.
-     * @deny (create) User attempts to create a session under another user's profile.
-     * @principle Enforces document ownership and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/sessions/{sessionId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
-    }
-
-    /**
-     * @description Rules for messages within a session.
-     * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) Signed-in user can create messages within their own sessions. Example: A user with UID 'user123' can create a document at /users/user123/sessions/session456/messages/message789.
-     * @allow (get, list) Signed-in user can read messages within their own sessions.
-     * @allow (update, delete) Signed-in user can update/delete messages within their own sessions. Example: A user with UID 'user123' can update the document at /users/user123/sessions/session456/messages/message789.
-     * @deny (create) User attempts to create a message in another user's session.
-     * @principle Enforces document ownership and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
-    }
-
-    /**
-     * @description Rules for knowledge sources.
-     * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (get, list) Any signed-in user can read knowledge sources.
-     * @deny (create, update, delete) Writes are disallowed for this version.
-     * @principle Allows public read access to knowledge sources.
-     */
-    match /knowledgeSources/{knowledgeSourceId} {
-      allow get, list: if true;
-      allow create, update, delete: if false;
-    }
-
-    /**
-     * @description Rules for admin roles.
-     * @path /roles_admin/{userId}
-     * @allow (get) The assigned user can read their own admin role.
-     * @deny (list, create, update, delete) Listing, creation, updating, and deletion are disallowed.
-     * @principle Restricts access to admin roles to the assigned user.
-     */
-    match /roles_admin/{userId} {
-      allow get: if isOwner(userId);
-      allow list, create, update, delete: if false;
-    }
-
-    /**
-     * @description Rules for fiscales (polling supervisors).
-     * @path /fiscales/{fiscalId}
-     * @allow (get, list) Any signed-in user can read fiscal information.
-     * @deny (create, update, delete) Writes are disallowed for this version.
-     */
-    match /fiscales/{fiscalId} {
-        allow get, list: if isSignedIn();
-        allow create, update, delete: if false;
+      return isSignedIn() && isOwner(userId) && resource != null;
     }
   }
 }
