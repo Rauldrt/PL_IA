@@ -1,9 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const schema = z.object({
@@ -11,10 +11,11 @@ const schema = z.object({
   password: z.string().min(6, { message: 'La contraseña debe tener al menos 6 caracteres.' }),
 });
 
+// This function now returns the created UserRecord on success
 export async function signup(
-  prevState: { message: string; success: boolean },
+  prevState: { message: string; success: boolean, userRecord?: UserRecord },
   formData: FormData
-): Promise<{ message: string; success: boolean }> {
+): Promise<{ message: string; success: boolean, userRecord?: UserRecord }> {
   const validatedFields = schema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
@@ -30,25 +31,16 @@ export async function signup(
   }
 
   const { email, password } = validatedFields.data;
+  const app = initializeFirebaseAdmin();
+  const auth = getAuth(app);
+  const firestore = getFirestore(app);
 
+  let userRecord: UserRecord;
   try {
-    const app = initializeFirebaseAdmin();
-    const auth = getAuth(app);
-    const firestore = getFirestore(app);
-
-    const userRecord = await auth.createUser({
+    userRecord = await auth.createUser({
       email,
       password,
     });
-    
-    // Create a user profile document in Firestore
-    await setDoc(doc(firestore, 'users', userRecord.uid), {
-        email: userRecord.email,
-        createdAt: new Date().toISOString(),
-    });
-
-    return { message: 'Usuario creado con éxito.', success: true };
-
   } catch (error: any) {
     let message = 'Ocurrió un error inesperado durante el registro.';
     if (error.code === 'auth/email-already-exists') {
@@ -56,7 +48,31 @@ export async function signup(
     } else if (error.code === 'auth/invalid-password') {
         message = 'La contraseña no es válida. Debe tener al menos 6 caracteres.';
     }
-    console.error('Firebase Admin Signup Error:', error.code, error.message);
+    return { message, success: false };
+  }
+
+  // Create a user profile document in Firestore
+  const userDocRef = doc(firestore, 'users', userRecord.uid);
+  const userData = {
+      email: userRecord.email,
+      createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(userDocRef, userData);
+    return { message: 'Usuario creado con éxito.', success: true, userRecord };
+  } catch (error: any) {
+    // This is where a permission error on the Firestore write would be caught
+    // While we can't emit a client-side error from a server action,
+    // we can return a more specific message.
+    let message = 'No se pudo crear el perfil de usuario en la base de datos. ';
+    if (error.code === 'permission-denied') {
+        message += 'Verifica las reglas de seguridad de Firestore.';
+    } else {
+        message += 'Error inesperado en la base de datos.';
+    }
+    // We should also delete the user from Auth to avoid a dangling account
+    await auth.deleteUser(userRecord.uid);
     return { message, success: false };
   }
 }
@@ -75,3 +91,5 @@ export async function login(
       success: true 
   };
 }
+
+    

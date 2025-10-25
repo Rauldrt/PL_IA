@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle, FileUp, FileText } from 'lucide-react';
 import AuthChatHeader from '@/components/auth/ChatHeader';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // Configure the worker for pdfjs-dist
 if (typeof window !== 'undefined') {
@@ -103,37 +105,44 @@ export default function AdminPage() {
 
     setIsLoading(true);
 
-    try {
-      const knowledgeCollection = collection(firestore, 'knowledgeSources');
-      await addDoc(knowledgeCollection, {
+    const knowledgeData = {
         name,
         content,
         url,
         uploadDate: serverTimestamp(),
-      });
+    };
 
-      toast({
-        title: 'Éxito',
-        description: 'Fuente de conocimiento agregada.',
+    const knowledgeCollection = collection(firestore, 'knowledgeSources');
+    
+    addDoc(knowledgeCollection, knowledgeData)
+      .then(() => {
+        toast({
+          title: 'Éxito',
+          description: 'Fuente de conocimiento agregada.',
+        });
+        setName('');
+        setContent('');
+        setUrl('');
+        setFileName('');
+      })
+      .catch((serverError) => {
+          const permissionError = new FirestorePermissionError({
+            path: knowledgeCollection.path,
+            operation: 'create',
+            requestResourceData: knowledgeData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+          
+          // Also show a generic error to the user via toast
+          toast({
+              title: 'Error de Permiso',
+              description: 'No tienes permiso para agregar fuentes de conocimiento.',
+              variant: 'destructive',
+          });
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
-      setName('');
-      setContent('');
-      setUrl('');
-      setFileName('');
-    } catch (error: any) {
-      console.error('Error adding knowledge source:', error);
-      let errorMessage = 'No se pudo guardar la fuente de conocimiento.';
-      if (error.code === 'permission-denied') {
-        errorMessage = 'No tienes permiso para realizar esta acción. Solo los administradores pueden agregar conocimiento.';
-      }
-      toast({
-        title: 'Error de Firestore',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (
@@ -250,3 +259,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    
