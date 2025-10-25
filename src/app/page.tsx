@@ -7,7 +7,7 @@ export default function LoginPage() {
       <div className="flex w-full max-w-sm flex-col items-center justify-center space-y-6">
         <div className="text-center">
           <div className="relative inline-block">
-            <div className="animated-gradient-bg absolute -inset-2 rounded-2xl bg-gradient-to-r from-primary to-accent opacity-75 blur-lg"></div>
+            <div className="animated-gradient-bg absolute -inset-2 rounded-2xl bg-gradient-to-r from-red-500 via-green-500 via-blue-500 to-yellow-500 opacity-75 blur-lg"></div>
             <div className="relative rounded-lg bg-card p-6 shadow-lg">
                 <Logo className="h-12 w-auto text-primary" />
             </div>

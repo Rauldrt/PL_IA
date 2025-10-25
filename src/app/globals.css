@@ -89,8 +89,8 @@ body {
 
 @layer utilities {
   .animated-gradient-bg {
-    background-size: 200% 200%;
-    animation: gradient-animation 5s ease infinite;
+    background-size: 400% 400%;
+    animation: gradient-animation 6s ease infinite;
   }
   @keyframes gradient-animation {
     0% { background-position: 0% 50%; }
