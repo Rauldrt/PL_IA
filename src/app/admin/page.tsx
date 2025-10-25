@@ -2,7 +2,7 @@
 
 import { useState, useRef, ChangeEvent, FormEvent } from 'react';
 import Link from 'next/link';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useFirebaseApp } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -35,6 +35,7 @@ function AdminPageContent() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const { toast } = useToast();
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -111,14 +112,14 @@ function AdminPageContent() {
       toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
       return;
     }
-    if (!firestore) {
-      toast({ title: 'Error de Firestore', description: 'No se pudo inicializar la base de datos.', variant: 'destructive' });
+    if (!firestore || !firebaseApp) {
+      toast({ title: 'Error de Firebase', description: 'No se pudo inicializar la base de datos o el almacenamiento.', variant: 'destructive' });
       return;
     }
 
     setIsUploadingAvatar(true);
     try {
-      const storage = getStorage();
+      const storage = getStorage(firebaseApp);
       const storagePath = `app-config/ai-avatar/${avatarFile.name}`;
       const imageRef = storageRef(storage, storagePath);
 
@@ -144,14 +145,14 @@ function AdminPageContent() {
       toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
       return;
     }
-    if (!firestore) {
-      toast({ title: 'Error de Firestore', description: 'No se pudo inicializar la base de datos.', variant: 'destructive' });
+    if (!firestore || !firebaseApp) {
+      toast({ title: 'Error de Firebase', description: 'No se pudo inicializar la base de datos o el almacenamiento.', variant: 'destructive' });
       return;
     }
 
     setIsUploadingLogo(true);
     try {
-      const storage = getStorage();
+      const storage = getStorage(firebaseApp);
       const storagePath = `app-config/app-logo/${logoFile.name}`;
       const imageRef = storageRef(storage, storagePath);
 
