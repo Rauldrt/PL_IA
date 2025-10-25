@@ -138,6 +138,7 @@ export default function AdminPage() {
             });
             errorEmitter.emit('permission-error', permissionError);
             
+            // The FirebaseErrorListener will throw, but we also show a toast as fallback.
             toast({
                 title: 'Error de Permiso',
                 description: 'No tienes permiso para agregar fuentes de conocimiento.',
