@@ -2,135 +2,131 @@
  * @fileoverview Firestore Security Rules for Conecta IA application.
  *
  * Core Philosophy:
- * This ruleset implements a role-based access control model, with strict user-ownership for personal data and admin-only access for managing knowledge sources.
+ * This ruleset prioritizes a secure, user-centric data model. It enforces strict
+ * ownership for user-related data (profiles, sessions, messages) and allows
+ * authenticated access to publicly available knowledge sources.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, accessible only to the user themselves.
- * - /users/{userId}/sessions/{sessionId}: Stores session data, accessible only to the user.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores message data, accessible only to the user.
- * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources, accessible only to admins.
- * - /roles_admin/{userId}: Presence of a document grants admin rights to the corresponding user.
+ * - /users/{userId}: Stores user profiles.
+ * - /users/{userId}/sessions/{sessionId}: Stores individual user sessions.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within a session.
+ * - /knowledgeSources/{knowledgeSourceId}: Stores publicly available knowledge sources.
  *
  * Key Security Decisions:
- * - User data (profiles, sessions, messages) is strictly owned by the user, enforced through the `isOwner(userId)` function.
- * - Knowledge sources can only be created, updated, or deleted by admin users.
- * - Admin privileges are determined by the existence of a document in the `/roles_admin/{userId}` collection.
- * - Listing of user documents is allowed only for the owner.
+ * - User data (profiles, sessions, messages) is strictly controlled; only the
+ *   authenticated user can access their own data.
+ * - Knowledge sources are publicly readable but only created by authenticated users.
+ * - Listing of users is disallowed for privacy reasons.
  *
  * Denormalization for Authorization:
- *  No denormalization needed in this security rule definition.
+ *  None: No specific denormalization is required to implement the data model.
  *
  * Structural Segregation:
- *  Private user data is stored under the `/users/{userId}` path, ensuring it is not publicly accessible.
+ *  The application uses separate collections for user-specific private data
+ *  (/users/{userId}/...) and public data (/knowledgeSources/{knowledgeSourceId}).
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Defines the function to check if the user is signed in.
+     * @description Denies all operations on the root collection to prevent accidental data leaks or modifications.
+     * @path /
+     * @allow (get, list, create, update, delete): if false
+     * @deny (get, list, create, update, delete): Always.
+     * @principle Prevents unintended access to the entire database.
      */
-    function isSignedIn() {
-      return request.auth != null;
+    match /{document=**} {
+      allow read, write: if false;
     }
 
     /**
-     * @description Defines the function to check if the user is the owner of the resource.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Defines the function to check if the user exists and is the owner of the resource.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Checks if the user has admin privileges by verifying the existence of a document in the /roles_admin/{userId} collection.
-     */
-    function isAdmin() {
-      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
-    }
-
-    /**
-     * @description Rules for the /users/{userId} collection.
+     * @description Rules for user profiles.
      * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their own profile.
-     * @allow (get, list, update, delete) - Authenticated user can access their own profile.
-     * @deny (create) - User cannot create a profile for another user.
-     * @deny (get, list, update, delete) - User cannot access another user's profile.
+     * @allow (create): if request.auth.uid == userId
+     * @allow (get, update, delete, list): if isOwner(userId)
+     * @deny (get): if false
+     * @deny (create): if request.auth.uid != userId
+     * @deny (update): if !isExistingOwner(userId)
+     * @deny (delete): if !isExistingOwner(userId)
+     * @deny (list): if false
      * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow list: if false; // Listing users is not permitted.
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Rules for the /users/{userId}/sessions/{sessionId} collection.
+     * @description Rules for user sessions.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) - Authenticated user can create a session under their profile.
-     * @allow (get, list, update, delete) - Authenticated user can access their own sessions.
-     * @deny (create) - User cannot create a session under another user's profile.
-     * @deny (get, list, update, delete) - User cannot access another user's sessions.
+     * @allow (get, list, create, update, delete): if isOwner(userId)
+     * @deny (get): if false
+     * @deny (create): if !isOwner(userId)
+     * @deny (update): if !isExistingOwner(userId)
+     * @deny (delete): if !isExistingOwner(userId)
+     * @deny (list): if !isOwner(userId)
      * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId} {
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Rules for the /users/{userId}/sessions/{sessionId}/messages/{messageId} collection.
+     * @description Rules for messages within a session.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) - Authenticated user can create a message under their session.
-     * @allow (get, list, update, delete) - Authenticated user can access their own messages.
-     * @deny (create) - User cannot create a message under another user's session.
-     * @deny (get, list, update, delete) - User cannot access another user's messages.
-     * @principle Enforces data ownership and restricts access to a user's own data.
+     * @allow (get, list, create, update, delete): if isOwner(userId)
+     * @deny (get): if false
+     * @deny (create): if !isOwner(userId)
+     * @deny (update): if !isExistingOwner(userId)
+     * @deny (delete): if !isExistingOwner(userId)
+     * @deny (list): if !isOwner(userId)
+     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Rules for the /knowledgeSources/{knowledgeSourceId} collection.
+     * @description Rules for knowledge sources.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (create, update, delete) - Only admin users can create, update, or delete knowledge sources.
-     * @allow (get, list) - Any user can read knowledge sources.
-     * @deny (create, update, delete) - Non-admin users cannot create, update, or delete knowledge sources.
-     * @principle Restricts write access to admin users only.
+     * @allow (get, list): if true
+     * @allow (create): if isSignedIn()
+     * @allow (update, delete): if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+     * @deny (get, list): if false
+     * @deny (create): if !isSignedIn()
+     * @deny (update, delete): if true
+     * @principle Public read with owner-only writes.
      */
     match /knowledgeSources/{knowledgeSourceId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && isAdmin();
-      allow update: if isSignedIn() && isAdmin() && resource != null;
-      allow delete: if isSignedIn() && isAdmin() && resource != null;
+      allow create: if isSignedIn();
+      allow update, delete: if false; //Open for admin role
+
     }
 
-    /**
-     * @description Rules for the /roles_admin/{userId} collection.
-     * @path /roles_admin/{userId}
-     */
-    match /roles_admin/{userId} {
-       allow get: if isAdmin();
-       allow list: if false;
-       allow create: if false;
-       allow update: if false;
-       allow delete: if false;
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
     }
   }
 }
