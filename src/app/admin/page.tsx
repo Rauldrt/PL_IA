@@ -115,7 +115,7 @@ export default function AdminPage() {
       console.error('Error adding knowledge source:', error);
       toast({
         title: 'Error de Firestore',
-        description: 'No se pudo guardar la fuente de conocimiento. Revisa los permisos.',
+        description: error.message || 'No se pudo guardar la fuente de conocimiento. Revisa los permisos y la conexión.',
         variant: 'destructive',
       });
     } finally {

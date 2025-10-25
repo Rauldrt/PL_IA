@@ -12,6 +12,7 @@ const ChatInputSchema = z.object({
   history: z.array(MessageSchema).describe('The conversation history.'),
   message: z.string().describe('The latest user message.'),
   sentiment: z.string().optional().describe('The sentiment of the user\'s message.'),
+  knowledge: z.string().optional().describe('Aditional knowledge for the AI agent to use.'),
 });
 type ChatInput = z.infer<typeof ChatInputSchema>;
 
@@ -26,6 +27,9 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
     input: { schema: ChatInputSchema },
     output: { schema: ChatOutputSchema },
     prompt: `Eres un agente de IA experto llamado Conecta IA. Tu propósito es ayudar a los usuarios con sus consultas.
+
+  Responde basándote únicamente en el siguiente contexto y base de conocimiento:
+  {{{knowledge}}}
 
   Analiza el sentimiento del usuario para entender mejor su estado emocional y adaptar tu respuesta.
   Sentimiento del último mensaje: {{{sentiment}}}
