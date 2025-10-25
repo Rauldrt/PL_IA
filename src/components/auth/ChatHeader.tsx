@@ -35,6 +35,9 @@ export default function AuthChatHeader() {
                 <ShieldCheck size={16} /> Admin
             </Link>
         )}
+        {user?.email && (
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+        )}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           Cerrar Sesión
