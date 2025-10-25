@@ -1,23 +1,88 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import PDFExtract from 'pdf-extract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, FileUp, FileText } from 'lucide-react';
 import ChatHeader from '@/components/chat/ChatHeader';
 
 export default function AdminPage() {
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
   const [url, setUrl] = useState('');
+  const [fileName, setFileName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
   const { toast } = useToast();
   const firestore = useFirestore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Error de archivo',
+        description: 'Por favor, selecciona un archivo PDF.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setFileName(file.name);
+    setIsParsing(true);
+    toast({ title: 'Procesando PDF', description: 'Extrayendo texto del archivo...' });
+
+    const pdfExtract = new PDFExtract();
+    const reader = new FileReader();
+
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result;
+        if (data) {
+          pdfExtract.extract(data as ArrayBuffer, {}, (err, extracted) => {
+            if (err) {
+                console.error('Error parsing PDF:', err);
+                toast({
+                  title: 'Error al procesar PDF',
+                  description: 'No se pudo extraer el texto del archivo.',
+                  variant: 'destructive',
+                });
+                setFileName('');
+                setIsParsing(false);
+                return;
+            }
+             if (extracted) {
+              const textContent = extracted.pages.map((page) => page.content.map((item) => item.str).join(' ')).join('\n\n');
+              setContent(textContent);
+              toast({
+                title: 'Éxito',
+                description: 'El contenido del PDF ha sido extraído y cargado en el campo de texto.',
+              });
+            }
+            setIsParsing(false);
+          });
+        }
+      } catch (error) {
+        console.error('Error reading PDF file:', error);
+        toast({
+          title: 'Error al leer archivo',
+          description: 'No se pudo leer el archivo PDF.',
+          variant: 'destructive',
+        });
+        setFileName('');
+        setIsParsing(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +103,6 @@ export default function AdminPage() {
         content,
         url,
         uploadDate: serverTimestamp(),
-        // Eventually, we'll add the userId here
       });
 
       toast({
@@ -48,6 +112,7 @@ export default function AdminPage() {
       setName('');
       setContent('');
       setUrl('');
+      setFileName('');
     } catch (error: any) {
       console.error('Error adding knowledge source:', error);
       toast({
@@ -69,7 +134,7 @@ export default function AdminPage() {
             <CardHeader>
               <CardTitle>Panel de Administración</CardTitle>
               <CardDescription>
-                Agrega nuevas fuentes de conocimiento para entrenar a tu agente de IA.
+                Agrega nuevas fuentes de conocimiento para entrenar a tu agente de IA. Puedes pegar texto, subir un PDF o proporcionar una URL.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -86,6 +151,45 @@ export default function AdminPage() {
                     required
                   />
                 </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="pdf-upload" className="font-medium">
+                    Cargar desde PDF
+                  </label>
+                   <Input
+                    id="pdf-upload"
+                    type="file"
+                    accept=".pdf"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isParsing}
+                  >
+                    {isParsing ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : fileName ? (
+                      <>
+                        <FileText className="mr-2" /> {fileName}
+                      </>
+                    ) : (
+                      <>
+                        <FileUp className="mr-2" /> Seleccionar PDF
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <hr className="w-full" />
+                    <span className="text-muted-foreground text-sm">O</span>
+                    <hr className="w-full" />
+                </div>
 
                 <div className="space-y-2">
                   <label htmlFor="content" className="font-medium">
@@ -95,8 +199,9 @@ export default function AdminPage() {
                     id="content"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder="Pega aquí el contenido del documento o la información."
+                    placeholder="Pega aquí el contenido del documento o el texto extraído del PDF."
                     rows={10}
+                    disabled={isParsing}
                   />
                 </div>
 
@@ -119,7 +224,7 @@ export default function AdminPage() {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading || isParsing}>
                   {isLoading ? (
                     <LoaderCircle className="animate-spin" />
                   ) : (
