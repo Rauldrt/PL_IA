@@ -1,50 +1,56 @@
 /**
- * @fileoverview Firestore Security Rules for Conecta IA application.
+ * @fileOverview Firestore Security Rules for Conecta IA.
  *
  * Core Philosophy:
- * This ruleset employs a strict user-ownership model for user-related data and
- * public read with owner-only writes for knowledge sources. Admin roles are
- * segregated and accessible only by the assigned user for reads.
+ * This ruleset enforces a user-ownership model for private data (users, sessions, messages),
+ * allows public read access to knowledge sources, and restricts admin role access.
+ * It adopts a prototyping approach, focusing on authorization and relationship integrity
+ * while omitting detailed data shape validation for rapid iteration.
  *
  * Data Structure:
- * - /users/{userId}: User profiles, sessions, and messages.
- * - /knowledgeSources/{knowledgeSourceId}: Publicly readable knowledge sources.
- * - /roles_admin/{userId}: Admin roles assigned to users.
+ * - /users/{userId}: Stores individual user profiles.
+ * - /users/{userId}/sessions/{sessionId}: Stores sessions for each user.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within sessions.
+ * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources accessible to all users.
+ * - /roles_admin/{userId}: Stores admin roles, accessible only to the assigned user.
+ * - /fiscales/{fiscalId}: Stores information about polling supervisors. Write access is currently not permitted.
  *
  * Key Security Decisions:
- * - Users can only access their own data under the /users/{userId} collection.
- * - Knowledge sources are publicly readable but writable only by the owner.
- * - Listing of users is disallowed.
+ * - Users can only access their own profile data, sessions, and messages.
+ * - Knowledge sources are publicly readable but writes are not permitted in this phase.
+ * - Admin roles are only readable by the assigned user.
+ * - Listing of user documents, sessions, and messages is allowed only by the owner.
+ * - The /fiscales collection is currently read-only; writes are denied.
  *
  * Denormalization for Authorization:
- *  N/A - The design relies on path-based authorization.
- *
- * Structural Segregation:
- *  Private user data is stored under /users/{userId}, while public knowledge
- *  sources are stored in the top-level /knowledgeSources collection.
+ *  - For this version, we're assuming that the 'userId' is correctly placed in the path
+ *    and that we can rely on request.auth.uid for authorization.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is authenticated.
+     * @description Checks if the request is made by a signed-in user.
+     * @return {boolean} True if the user is signed in, false otherwise.
      */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * @description Checks if the authenticated user's UID matches the provided userId.
-     * @param {string} userId - The user ID to compare against.
+     * @description Checks if the authenticated user ID matches the provided user ID.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user is the owner, false otherwise.
      */
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
     /**
-     * @description Checks if the authenticated user's UID matches the provided userId and the resource exists.
-     * @param {string} userId - The user ID to compare against.
+     * @description Checks if the authenticated user is the owner of the existing document.
+     * @param {string} userId The user ID to compare against.
+     * @return {boolean} True if the user is the owner and the resource exists, false otherwise.
      */
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
@@ -53,16 +59,16 @@ service cloud.firestore {
     /**
      * @description Rules for user profiles.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user123' creates their profile at /users/user123 with matching data.id.
-     * @deny (create) - User with UID 'user123' tries to create a profile at /users/user456.
-     * @allow (get, update, delete) - User with UID 'user123' reads/updates/deletes their profile at /users/user123.
-     * @deny (get, update, delete) - User with UID 'user123' tries to read/update/delete the profile at /users/user456.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) Signed-in user can create their own profile if the userId matches their auth.uid. Example: A user with UID 'user123' can create a document at /users/user123.
+     * @allow (get, list) Signed-in user can read their own profile.
+     * @allow (update, delete) Signed-in user can update/delete their own profile if the userId matches their auth.uid. Example: A user with UID 'user123' can update the document at /users/user123.
+     * @deny (create) User attempts to create a profile with a userId that does not match their auth.uid.
+     * @principle Enforces document ownership for reads and writes.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.email is string && request.resource.data.createdAt is string;
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
@@ -70,99 +76,70 @@ service cloud.firestore {
     /**
      * @description Rules for user sessions.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) - User with UID 'user123' creates a session under their profile.
-     * @deny (create) - User with UID 'user123' tries to create a session under another user's profile.
-     * @allow (get, update, delete) - User with UID 'user123' reads/updates/deletes their own session.
-     * @deny (get, update, delete) - User with UID 'user123' tries to read/update/delete another user's session.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (create) Signed-in user can create sessions under their own profile. Example: A user with UID 'user123' can create a document at /users/user123/sessions/session456.
+     * @allow (get, list) Signed-in user can read sessions under their own profile.
+     * @allow (update, delete) Signed-in user can update/delete sessions under their own profile. Example: A user with UID 'user123' can update the document at /users/user123/sessions/session456.
+     * @deny (create) User attempts to create a session under another user's profile.
+     * @principle Enforces document ownership and restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId} {
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.userId == userId && request.resource.data.startTime is string;
-      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
      * @description Rules for messages within a session.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) - User with UID 'user123' creates a message within their session.
-     * @deny (create) - User with UID 'user123' tries to create a message in another user's session.
-     * @allow (get, update, delete) - User with UID 'user123' reads/updates/deletes their own messages.
-     * @deny (get, update, delete) - User with UID 'user123' tries to read/update/delete messages in another user's session.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (create) Signed-in user can create messages within their own sessions. Example: A user with UID 'user123' can create a document at /users/user123/sessions/session456/messages/message789.
+     * @allow (get, list) Signed-in user can read messages within their own sessions.
+     * @allow (update, delete) Signed-in user can update/delete messages within their own sessions. Example: A user with UID 'user123' can update the document at /users/user123/sessions/session456/messages/message789.
+     * @deny (create) User attempts to create a message in another user's session.
+     * @principle Enforces document ownership and restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.sessionId is string && request.resource.data.sender is string && request.resource.data.content is string && request.resource.data.timestamp is string;
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Rules for knowledge sources. Public read, owner-only write.
+     * @description Rules for knowledge sources.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (get, list) - Any user can read knowledge sources.
-     * @allow (create) - Any signed in user can create a knowledge source.
-     * @deny (update, delete) - Only the owner can update or delete a knowledge source.
-     * @principle Public read, owner-only writes.
+     * @allow (get, list) Any signed-in user can read knowledge sources.
+     * @deny (create, update, delete) Writes are disallowed for this version.
+     * @principle Allows public read access to knowledge sources.
      */
     match /knowledgeSources/{knowledgeSourceId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isSignedIn() && request.resource.data.name is string && request.resource.data.uploadDate is string;
-      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
-      // CRITICAL: Cannot implement owner-only writes. The 'KnowledgeSource' entity is missing an 'ownerId' or 'authorId' field.
+      allow get, list: if true;
+      allow create, update, delete: if false;
     }
 
     /**
-     * @description Rules for admin roles. Only accessible by the assigned user for reads.
+     * @description Rules for admin roles.
      * @path /roles_admin/{userId}
-     * @allow (get) - User with UID 'user123' can read their own admin role at /roles_admin/user123.
-     * @deny (get) - User with UID 'user123' tries to read the admin role of user 'user456' at /roles_admin/user456.
-     * @deny (create, update, delete) - No one can create, update, or delete admin roles through client-side rules. These should be managed via a trusted environment (e.g., Cloud Functions).
-     * @principle Restricts access to a user's own admin role data.
+     * @allow (get) The assigned user can read their own admin role.
+     * @deny (list, create, update, delete) Listing, creation, updating, and deletion are disallowed.
+     * @principle Restricts access to admin roles to the assigned user.
      */
     match /roles_admin/{userId} {
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow list, create, update, delete: if false;
     }
-     /**
-      * @description Rules for polling supervisors (fiscales).
-      * @path /fiscales/{fiscalId}
-      * @allow get: if true;
-      * @allow list: if true;
-      * @allow create: if false; // TODO: Add proper authorization logic.
-      * @allow update: if false; // TODO: Add proper authorization logic.
-      * @allow delete: if false; // TODO: Add proper authorization logic.
-      */
-     match /fiscales/{fiscalId} {
-        allow get: if true;
-        allow list: if true;
-        allow create: if false; // TODO: Add proper authorization logic.
-        allow update: if false; // TODO: Add proper authorization logic.
-        allow delete: if false; // TODO: Add proper authorization logic.
-     }
 
     /**
-     * @description Rules for app settings configuration.  Anyone can read.
-     * @path /config/app-settings
-     * @allow (get) - Any user can read app settings.
-     * @deny (create, update, delete) - No one can create, update, or delete app settings through client-side rules. These should be managed via a trusted environment (e.g., Cloud Functions).
-     * @principle Public read-only access.
+     * @description Rules for fiscales (polling supervisors).
+     * @path /fiscales/{fiscalId}
+     * @allow (get, list) Any signed-in user can read fiscal information.
+     * @deny (create, update, delete) Writes are disallowed for this version.
      */
-    match /config/app-settings {
-      allow get: if true;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+    match /fiscales/{fiscalId} {
+        allow get, list: if isSignedIn();
+        allow create, update, delete: if false;
     }
   }
 }

@@ -160,8 +160,7 @@ function FiscalesPageContent() {
             if (error.code === 'permission-denied') {
                 const permissionError = new FirestorePermissionError({
                     path: fiscalesCollectionPath,
-                    operation: 'create',
-                    requestResourceData: fiscales, 
+                    operation: 'create', // This represents the batch operation intent
                 });
                 errorEmitter.emit('permission-error', permissionError);
             } else {
