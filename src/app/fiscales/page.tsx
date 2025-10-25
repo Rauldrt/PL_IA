@@ -5,7 +5,7 @@ import AuthChatHeader from '@/components/auth/ChatHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { MessageCircle, UserPlus, Trash2, LoaderCircle } from 'lucide-react';
+import { MessageCircle, UserPlus, Trash2, LoaderCircle, MessageSquare } from 'lucide-react';
 import AdminGuard from '@/components/auth/AdminGuard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,24 @@ interface Fiscal {
     mesa: string;
     telefono: string;
 }
+
+const WhatsAppIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+    </svg>
+);
+
 
 function FiscalesPageContent() {
     const { toast } = useToast();
@@ -67,6 +85,14 @@ function FiscalesPageContent() {
                 });
             }
         });
+    };
+
+    const formatWhatsAppLink = (phone: string) => {
+        let cleanedPhone = phone.replace(/[^0-9]/g, '');
+        if (!cleanedPhone.startsWith('54')) {
+            cleanedPhone = `54${cleanedPhone}`;
+        }
+        return `https://wa.me/${cleanedPhone}`;
     };
 
     const savedFiscalesByEscuela = useMemo(() => {
@@ -140,6 +166,7 @@ function FiscalesPageContent() {
                                                     <TableHead>DNI</TableHead>
                                                     <TableHead>Mesa</TableHead>
                                                     <TableHead>Rol</TableHead>
+                                                    <TableHead>Contacto</TableHead>
                                                     <TableHead>Acción</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -150,6 +177,13 @@ function FiscalesPageContent() {
                                                         <TableCell>{fiscal.dni}</TableCell>
                                                         <TableCell>{fiscal.mesa}</TableCell>
                                                         <TableCell>{fiscal.rol}</TableCell>
+                                                        <TableCell>
+                                                            <Button asChild variant="ghost" size="icon" disabled={!fiscal.telefono}>
+                                                                <a href={formatWhatsAppLink(fiscal.telefono)} target="_blank" rel="noopener noreferrer">
+                                                                     <WhatsAppIcon className="h-5 w-5 text-green-500" />
+                                                                </a>
+                                                            </Button>
+                                                        </TableCell>
                                                         <TableCell>
                                                             <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
                                                                 <Trash2 className="h-4 w-4 text-destructive" />
