@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { LogOut, ShieldCheck, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons';
 import { useAuth, useUser } from '@/firebase';
@@ -31,9 +31,14 @@ export default function AuthChatHeader() {
       </Link>
       <div className="flex items-center gap-4">
         {!isAdminLoading && isAdmin && (
-            <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-                <ShieldCheck size={16} /> Admin
-            </Link>
+            <>
+                <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                    <Briefcase size={16} /> Fiscales
+                </Link>
+                <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                    <ShieldCheck size={16} /> Admin
+                </Link>
+            </>
         )}
         {user?.email && (
             <span className="text-sm text-muted-foreground">{user.email}</span>
