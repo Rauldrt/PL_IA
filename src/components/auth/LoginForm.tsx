@@ -36,41 +36,46 @@ export default function LoginForm() {
   const { toast } = useToast();
   const auth = useAuth();
 
-  const handleLogin = async (prevState: any, formData: FormData) => {
-    const result = await login(prevState, formData);
-    if (result.success) {
-      const email = formData.get('email') as string;
-      const password = formData.get('password') as string;
-      try {
-        await signInWithEmailAndPassword(auth, email, password);
-        toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
-        router.push('/chat');
-      } catch (error) {
-        toast({ title: 'Error de inicio de sesión', description: 'Email o contraseña incorrectos.', variant: 'destructive' });
+  const handleAuthAction = async (prevState: any, formData: FormData) => {
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    if (isSignup) {
+      const result = await signup(prevState, formData);
+      if (result.success) {
+        toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
+        setIsSignup(false);
+      } else if (result.message) {
+        toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
       }
-    } else if (result.message) {
-      toast({ title: 'Error de inicio de sesión', description: result.message, variant: 'destructive' });
+      return result;
+    } else {
+      // Login flow
+      const result = await login(prevState, formData);
+      if (result.success) {
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
+          router.push('/chat');
+        } catch (error: any) {
+           let message = 'Email o contraseña incorrectos.';
+            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                message = 'El email o la contraseña son incorrectos.';
+            }
+          toast({ title: 'Error de inicio de sesión', description: message, variant: 'destructive' });
+        }
+      } else if (result.message) {
+         toast({ title: 'Error de inicio de sesión', description: result.message, variant: 'destructive' });
+      }
+      return result;
     }
-    return result;
   };
   
-  const handleSignup = async (prevState: any, formData: FormData) => {
-    const result = await signup(prevState, formData);
-    if (result.success) {
-      toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
-      setIsSignup(false);
-    } else if (result.message) {
-      toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
-    }
-    return result;
-  };
-
-  const [loginState, loginAction] = useActionState(handleLogin, { message: '', success: false });
-  const [signupState, signupAction] = useActionState(handleSignup, { message: '', success: false });
+  const [authState, formAction] = useActionState(handleAuthAction, { message: '', success: false });
 
   return (
     <Card className="w-full">
-      <form action={isSignup ? signupAction : loginAction}>
+      <form action={formAction}>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
