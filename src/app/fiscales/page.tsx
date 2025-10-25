@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import AuthChatHeader from '@/components/auth/ChatHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,7 +82,6 @@ function FiscalesPageContent() {
         rows.forEach((row, index) => {
             if (parsingError) return;
 
-            // Try splitting by tab first, then by comma
             let columns = row.split('\t');
             if (columns.length < 6) {
                 columns = row.split(',').map(s => s.trim());
@@ -119,8 +118,8 @@ function FiscalesPageContent() {
         }
     };
 
-    const handleRemoveFiscal = (index: number) => {
-        setFiscales(prev => prev.filter((_, i) => i !== index));
+    const handleRemoveFiscal = (dniToRemove: string) => {
+        setFiscales(prev => prev.filter(fiscal => fiscal.dni !== dniToRemove));
     };
 
     const handleSaveAll = async () => {
@@ -139,10 +138,10 @@ function FiscalesPageContent() {
         }
 
         setIsSaving(true);
-        const fiscalesCollection = collection(firestore, 'fiscales');
         
         try {
             const batch = writeBatch(firestore);
+            const fiscalesCollection = collection(firestore, 'fiscales');
             
             fiscales.forEach(fiscal => {
                 const docRef = doc(fiscalesCollection);
@@ -157,11 +156,12 @@ function FiscalesPageContent() {
             });
             setFiscales([]);
         } catch (error: any) {
+            const fiscalesCollectionPath = 'fiscales';
             if (error.code === 'permission-denied') {
                 const permissionError = new FirestorePermissionError({
-                    path: fiscalesCollection.path,
-                    operation: 'create', // Batch write is a 'create' operation here
-                    requestResourceData: fiscales, // Send all data for context
+                    path: fiscalesCollectionPath,
+                    operation: 'create',
+                    requestResourceData: fiscales, 
                 });
                 errorEmitter.emit('permission-error', permissionError);
             } else {
@@ -176,6 +176,17 @@ function FiscalesPageContent() {
             setIsSaving(false);
         }
     };
+    
+    const fiscalesByEscuela = useMemo(() => {
+        return fiscales.reduce((acc, fiscal) => {
+            const escuela = fiscal.escuela || 'Sin Escuela Asignada';
+            if (!acc[escuela]) {
+                acc[escuela] = [];
+            }
+            acc[escuela].push(fiscal);
+            return acc;
+        }, {} as Record<string, Fiscal[]>);
+    }, [fiscales]);
 
 
     return (
@@ -271,61 +282,69 @@ function FiscalesPageContent() {
                             </Card>
                         </div>
                         
-                        {/* Table Section */}
-                        <Card className="lg:col-span-1">
-                            <CardHeader>
+                        <div className="space-y-6 lg:col-span-1">
+                            <Card>
+                                <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <div>
-                                    <CardTitle>Fiscales para Guardar</CardTitle>
-                                    <CardDescription>
-                                        Actualmente hay {fiscales.length} fiscales en la lista para ser guardados.
-                                    </CardDescription>
+                                        <CardTitle>Fiscales para Guardar</CardTitle>
+                                        <CardDescription>
+                                            Actualmente hay {fiscales.length} fiscales en la lista para ser guardados.
+                                        </CardDescription>
                                     </div>
                                     <Button onClick={handleSaveAll} disabled={fiscales.length === 0 || isSaving}>
                                         {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin"/> : null}
                                         Guardar Todo
                                     </Button>
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="max-h-[600px] overflow-auto border rounded-lg">
-                                    <Table>
-                                        <TableHeader className="sticky top-0 bg-muted">
-                                            <TableRow>
-                                                <TableHead>Apellido y Nombre</TableHead>
-                                                <TableHead>DNI</TableHead>
-                                                <TableHead>Escuela</TableHead>
-                                                <TableHead>Mesa</TableHead>
-                                                <TableHead>Rol</TableHead>
-                                                <TableHead>Acción</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {fiscales.length > 0 ? fiscales.map((fiscal, index) => (
-                                                <TableRow key={index}>
-                                                    <TableCell>{fiscal.apellidoYNombre}</TableCell>
-                                                    <TableCell>{fiscal.dni}</TableCell>
-                                                    <TableCell>{fiscal.escuela}</TableCell>
-                                                    <TableCell>{fiscal.mesa}</TableCell>
-                                                    <TableCell>{fiscal.rol}</TableCell>
-                                                    <TableCell>
-                                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(index)}>
-                                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="text-center h-24">
-                                                        No hay fiscales en la lista.
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                </CardHeader>
+                            </Card>
+                            <div className="space-y-4 max-h-[700px] overflow-auto pr-2">
+                            {Object.keys(fiscalesByEscuela).length === 0 ? (
+                                <Card>
+                                    <CardContent className="pt-6">
+                                    <p className="text-center text-muted-foreground">No hay fiscales en la lista.</p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                Object.entries(fiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
+                                    <Card key={escuela}>
+                                        <CardHeader>
+                                            <CardTitle className="text-lg">{escuela}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Apellido y Nombre</TableHead>
+                                                        <TableHead>DNI</TableHead>
+                                                        <TableHead>Mesa</TableHead>
+                                                        <TableHead>Rol</TableHead>
+                                                        <TableHead>Acción</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {fiscalesDeEscuela.map((fiscal) => (
+                                                        <TableRow key={fiscal.dni}>
+                                                            <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
+                                                            <TableCell>{fiscal.dni}</TableCell>
+                                                            <TableCell>{fiscal.mesa}</TableCell>
+                                                            <TableCell>{fiscal.rol}</TableCell>
+                                                            <TableCell>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(fiscal.dni)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </CardContent>
+                                    </Card>
+                                ))
+                            )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>
