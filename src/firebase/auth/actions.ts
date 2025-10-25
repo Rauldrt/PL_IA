@@ -3,9 +3,7 @@
 import { z } from 'zod';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, setDoc, writeBatch } from 'firebase-admin/firestore';
-import { getFirestore } from 'firebase-admin/firestore';
-
+import { doc, writeBatch, getFirestore } from 'firebase-admin/firestore';
 
 const schema = z.object({
   email: z.string().email({ message: 'El email no es válido.' }),
@@ -13,9 +11,9 @@ const schema = z.object({
 });
 
 export async function signup(
-  prevState: { message: string; success: boolean, userRecord?: UserRecord },
+  prevState: { message: string; success: boolean },
   formData: FormData
-): Promise<{ message: string; success: boolean, userRecord?: UserRecord }> {
+): Promise<{ message: string; success: boolean }> {
   const validatedFields = schema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
@@ -51,7 +49,7 @@ export async function signup(
     return { message, success: false };
   }
 
-  // Create user profile and admin role in a batch write
+  // Create user profile and admin role in a batch write using the Admin SDK
   const batch = writeBatch(firestore);
 
   const userDocRef = doc(firestore, 'users', userRecord.uid);
@@ -68,21 +66,14 @@ export async function signup(
   };
   batch.set(adminRoleRef, adminData);
 
-
   try {
     await batch.commit();
-    return { message: 'Usuario creado con éxito y asignado como administrador.', success: true, userRecord };
+    return { message: 'Usuario creado con éxito y asignado como administrador.', success: true };
   } catch (error: any) {
-    console.error('Firestore batch commit error:', error);
-    let message = 'No se pudo crear el perfil y rol del usuario en la base de datos. ';
-    if (error.code === 'permission-denied') {
-        message += 'Verifica las reglas de seguridad de Firestore.';
-    } else {
-        message += 'Error inesperado en la base de datos.';
-    }
-    // We should also delete the user from Auth to avoid a dangling account
+    console.error('Firestore batch commit error with Admin SDK:', error);
+    // If the batch fails, we must delete the user from Auth to avoid a dangling account.
     await auth.deleteUser(userRecord.uid);
-    return { message, success: false };
+    return { message: 'No se pudo crear el perfil y rol del usuario en la base de datos.', success: false };
   }
 }
 
