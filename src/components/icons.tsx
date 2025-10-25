@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const DefaultLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <svg
@@ -14,6 +15,22 @@ const DefaultLogo = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
   );
 
-export const Logo = (props: React.SVGProps<SVGSVGElement>) => {
+export const Logo = (props: React.SVGProps<SVGSVGElement> & { className?: string }) => {
+    const appLogo = PlaceHolderImages.find(p => p.id === 'app-logo');
+    const logoUrl = appLogo?.imageUrl;
+
+    if (logoUrl) {
+        return (
+            <div className={props.className} style={{ width: props.width, height: props.height }}>
+                <Image
+                    src={logoUrl}
+                    alt="App Logo"
+                    width={Number(props.width) || 48}
+                    height={Number(props.height) || 48}
+                    className="object-contain"
+                />
+            </div>
+        );
+    }
     return <DefaultLogo {...props} />;
 };
