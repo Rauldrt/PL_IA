@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, writeBatch, getFirestore } from 'firebase-admin/firestore';
+import { doc, setDoc, getFirestore } from 'firebase-admin/firestore';
 
 const schema = z.object({
   email: z.string().email({ message: 'El email no es válido.' }),
@@ -49,31 +49,21 @@ export async function signup(
     return { message, success: false };
   }
 
-  // Create user profile and admin role in a batch write using the Admin SDK
-  const batch = writeBatch(firestore);
-
+  // Create user profile in Firestore using the Admin SDK
   const userDocRef = doc(firestore, 'users', userRecord.uid);
   const userData = {
       email: userRecord.email,
       createdAt: new Date().toISOString(),
   };
-  batch.set(userDocRef, userData);
-
-  const adminRoleRef = doc(firestore, 'roles_admin', userRecord.uid);
-  const adminData = {
-    isAdmin: true,
-    assignedAt: new Date().toISOString(),
-  };
-  batch.set(adminRoleRef, adminData);
 
   try {
-    await batch.commit();
-    return { message: 'Usuario creado con éxito y asignado como administrador.', success: true };
+    await setDoc(userDocRef, userData);
+    return { message: 'Usuario creado con éxito.', success: true };
   } catch (error: any) {
-    console.error('Firestore batch commit error with Admin SDK:', error);
-    // If the batch fails, we must delete the user from Auth to avoid a dangling account.
+    console.error('Firestore setDoc error with Admin SDK:', error);
+    // If the profile creation fails, we must delete the user from Auth to avoid a dangling account.
     await auth.deleteUser(userRecord.uid);
-    return { message: 'No se pudo crear el perfil y rol del usuario en la base de datos.', success: false };
+    return { message: 'No se pudo crear el perfil del usuario en la base de datos.', success: false };
   }
 }
 

@@ -108,26 +108,6 @@
         "name",
         "uploadDate"
       ]
-    },
-    "AdminRole": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "AdminRole",
-      "type": "object",
-      "description": "The existence of a document in the 'roles_admin/{userId}' collection indicates that the user has admin privileges. The document itself can be empty or contain relevant metadata.",
-      "properties": {
-        "isAdmin": {
-          "type": "boolean",
-          "description": "A flag to signify admin status, typically true."
-        },
-        "assignedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Timestamp for when the admin role was assigned."
-        }
-      },
-      "required": [
-        "isAdmin"
-      ]
     }
   },
   "auth": {
@@ -174,17 +154,7 @@
           "schema": {
             "$ref": "#/entities/KnowledgeSource"
           },
-          "description": "Stores knowledge sources added to the Gemini AI. Accessible only by admin users."
-        }
-      },
-      {
-        "path": "/roles_admin/{userId}",
-        "definition": {
-          "entityName": "AdminRole",
-          "schema": {
-            "$ref": "#/entities/AdminRole"
-          },
-          "description": "A document in this collection indicates that the user has admin privileges. Its existence grants admin rights."
+          "description": "Stores knowledge sources added to the Gemini AI. Accessible by any authenticated user."
         }
       }
     ]
