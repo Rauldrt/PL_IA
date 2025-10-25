@@ -1,108 +1,112 @@
 /**
- * @fileoverview Firestore Security Rules for Conecta IA application.
+ * @fileoverview Firestore Security Rules for Conecta IA.
  *
  * Core Philosophy:
- * This ruleset employs a strict user-ownership model for user profiles, sessions, and messages,
- * ensuring that only the authenticated user can access their own data. Knowledge sources
- * are publicly readable but owner-writable. Admin roles are readable only by the assigned user.
+ * This ruleset enforces a strict user-ownership model for user profiles, sessions, and messages.
+ * Knowledge sources are publicly readable, but only authenticated users can create, update, or delete them.
+ * Admin roles are private and only readable by the assigned user.
  *
  * Data Structure:
- * - /users/{userId}: User profile information.
- * - /users/{userId}/sessions/{sessionId}: User session data.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session.
- * - /knowledgeSources/{knowledgeSourceId}: Publicly accessible knowledge sources.
- * - /roles_admin/{userId}: Admin roles assigned to users.
+ * - /users/{userId}: User profiles, owned by the user.
+ * - /users/{userId}/sessions/{sessionId}: Sessions for each user, owned by the user.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session, owned by the user.
+ * - /knowledgeSources/{knowledgeSourceId}: Knowledge sources, readable by all, writable by authenticated users.
+ * - /roles_admin/{userId}: Admin roles, only readable by the assigned user.
  *
  * Key Security Decisions:
- * - User listing is disallowed to protect user privacy.
- * - Public read access is granted for knowledge sources, but writes are restricted to owners.
- * - Admin roles are readable only by the user to whom the role is assigned.
- *
- * Denormalization for Authorization:
- *  - The rules assume that the 'userId' is embedded within session documents to quickly verify user ownership.
+ * - User listing is disallowed to protect privacy.
+ * - Ownership is enforced by matching the `userId` in the path with `request.auth.uid`.
+ * - Knowledge sources are publicly readable but writable by authenticated users, NOT publicly writable.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Protects user profiles, allowing only the user themselves to read and write their data.
+     * @description Checks if the requesting user is signed in.
+     * @return {boolean} True if the user is signed in, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the requesting user is the owner of the resource.
+     * @param {string} userId The user ID to compare against the request's auth UID.
+     * @return {boolean} True if the user is the owner, false otherwise.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the requesting user is the owner of the existing resource.
+     * @param {string} userId The user ID to compare against the request's auth UID.
+     * @return {boolean} True if the user is the owner and the resource exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Rules for user profiles.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user123' can create their profile at /users/user123 if request.auth.uid == 'user123'.
-     * @allow (get, update, delete) - User with UID 'user123' can read/update/delete their profile at /users/user123 if request.auth.uid == 'user123'.
-     * @deny (create) - User with UID 'user456' cannot create a profile at /users/user123.
-     * @deny (get, update, delete) - User with UID 'user456' cannot read/update/delete the profile at /users/user123.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User with auth UID 'user123' can create a profile at /users/user123 if request.auth.uid == 'user123'.
+     * @allow (get, update, delete) - User with auth UID 'user123' can get, update, and delete their profile at /users/user123.
+     * @deny (create) - User with auth UID 'user456' cannot create a profile at /users/user123.
+     * @deny (get, update, delete) - User with auth UID 'user456' cannot get, update, or delete the profile at /users/user123.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && resource != null;
-      allow delete: if isOwner(userId) && resource != null;
+      allow list: if false; // User listing is disallowed.
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects user sessions, allowing only the owning user to read and write session data.
+     * @description Rules for user sessions.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) - User with UID 'user123' can create a session at /users/user123/sessions/session1 if request.auth.uid == 'user123'.
-     * @allow (get, update, delete) - User with UID 'user123' can read/update/delete their session at /users/user123/sessions/session1 if request.auth.uid == 'user123'.
-     * @deny (create) - User with UID 'user456' cannot create a session at /users/user123/sessions/session1.
-     * @deny (get, update, delete) - User with UID 'user456' cannot read/update/delete the session at /users/user123/sessions/session1.
-     * @principle Enforces document ownership; ensures data consistency between path and document.
+     * @allow (create) - User with auth UID 'user123' can create a session at /users/user123/sessions/session456 if request.auth.uid == 'user123'.
+     * @allow (get, update, delete) - User with auth UID 'user123' can get, update, and delete their session at /users/user123/sessions/session456.
+     * @deny (create) - User with auth UID 'user456' cannot create a session at /users/user123/sessions/session456.
+     * @deny (get, update, delete) - User with auth UID 'user456' cannot get, update, or delete the session at /users/user123/sessions/session456.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/sessions/{sessionId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && resource != null;
-      allow delete: if isOwner(userId) && resource != null;
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects messages within user sessions, ensuring only the owning user can access them.
+     * @description Rules for messages within a session.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) - User 'user123' can create a message in their session.
-     * @allow (get, update, delete) - User 'user123' can manage messages in their session.
-     * @deny (create) - User 'user456' cannot create a message in user123's session.
-     * @deny (get, update, delete) - User 'user456' cannot manage messages in user123's session.
-     * @principle Enforces strict user ownership for all message operations.
+     * @allow (create) - User with auth UID 'user123' can create a message at /users/user123/sessions/session456/messages/message789 if request.auth.uid == 'user123'.
+     * @allow (get, update, delete) - User with auth UID 'user123' can get, update, and delete their message at /users/user123/sessions/session456/messages/message789.
+     * @deny (create) - User with auth UID 'user456' cannot create a message at /users/user123/sessions/session456/messages/message789.
+     * @deny (get, update, delete) - User with auth UID 'user456' cannot get, update, or delete the message at /users/user123/sessions/session456/messages/message789.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && resource != null;
-      allow delete: if isOwner(userId) && resource != null;
+      allow create: if isOwner(userId) && request.resource.data.sessionId == sessionId;
+      allow update: if isExistingOwner(userId) && request.resource.data.sessionId == resource.data.sessionId;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows any authenticated user to read knowledge sources, but restricts creation, updates, and deletion to owners.
+     * @description Rules for knowledge sources.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (get, list) - Any authenticated user can read knowledge sources.
-     * @allow (create) - User can create a knowledge source if they are the owner.
-     * @allow (update, delete) - Only the owner can update/delete a knowledge source.
-     * @deny (create) - Non-owner cannot create a knowledge source with incorrect ownerId.
-     * @deny (update, delete) - Non-owner cannot update/delete a knowledge source.
-     * @principle Allows public read access with owner-only write access, enforces ownership on create, update, and delete.
+     * @allow (get, list) - Any user (signed in or not) can read knowledge sources.
+     * @allow (create, update, delete) - Only authenticated users can create, update, or delete knowledge sources.
+     * @deny (create, update, delete) - Unauthenticated users cannot create, update, or delete knowledge sources.
      */
     match /knowledgeSources/{knowledgeSourceId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if true;
       allow create: if isSignedIn();
       allow update: if isSignedIn() && resource != null;
@@ -110,18 +114,13 @@ service cloud.firestore {
     }
 
     /**
-     * @description Protects admin roles, allowing only the assigned user to read their own role.
+     * @description Rules for admin roles.
      * @path /roles_admin/{userId}
-     * @allow (get) - User with UID 'user123' can read their admin role at /roles_admin/user123.
-     * @deny (get) - User with UID 'user456' cannot read the admin role at /roles_admin/user123.
-     * @deny (create, update, delete) - No one can create, update, or delete admin roles via client-side rules. Admin roles should be managed via a trusted environment.
-     * @principle Restricts read access to the assigned user; prohibits client-side creation, updates, and deletions.
+     * @allow (get) - Only the assigned user can read their admin role.
+     * @deny (get) - Other users cannot read admin roles.
+     * @deny (create, update, delete, list) - No one can create, update, delete, or list admin roles through the client.  These are set server-side.
      */
     match /roles_admin/{userId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if false;
@@ -130,18 +129,13 @@ service cloud.firestore {
     }
 
     /**
-     * @description Configuration document containing app settings. Accessible only to authenticated users.
+     * @description Rules for global app settings.
      * @path /config/app-settings
-     * @allow (get) - Any authenticated user can read app settings.
-     * @deny (list, create, update, delete) - No one can list, create, update, or delete app settings via client-side rules. App settings should be managed via a trusted environment.
-     * @principle Restricts read access to authenticated users; prohibits client-side creation, updates, and deletions.
+     * @allow (get) - Any user (signed in or not) can read app settings.
+     * @deny (create, update, delete, list) - No one can create, update, delete, or list app settings through the client. These are set server-side.
      */
     match /config/app-settings {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      allow get: if isSignedIn();
+      allow get: if true;
       allow list: if false;
       allow create: if false;
       allow update: if false;
