@@ -6,8 +6,13 @@ export default function LoginPage() {
     <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4 sm:p-8">
       <div className="flex w-full max-w-sm flex-col items-center justify-center space-y-6">
         <div className="text-center">
-          <Logo className="mx-auto h-12 w-auto text-primary" />
-          <h1 className="mt-6 font-headline text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+          <div className="relative inline-block">
+            <div className="animated-gradient-bg absolute -inset-2 rounded-2xl bg-gradient-to-r from-primary to-accent opacity-75 blur-lg"></div>
+            <div className="relative rounded-lg bg-card p-6 shadow-lg">
+                <Logo className="h-12 w-auto text-primary" />
+            </div>
+          </div>
+          <h1 className="mt-8 font-headline text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
             Bienvenido a Conecta IA
           </h1>
           <p className="mt-4 text-base text-muted-foreground">
