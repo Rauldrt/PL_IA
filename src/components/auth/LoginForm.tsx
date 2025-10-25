@@ -8,9 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { createUserProfile } from '@/firebase/auth/actions';
+import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
 
 export default function LoginForm() {
   const [isSignup, setIsSignup] = React.useState(false);
@@ -18,6 +18,7 @@ export default function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
+  const firestore = useFirestore();
 
   const handleAuthAction = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -26,30 +27,42 @@ export default function LoginForm() {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    if (!auth) {
-       toast({ title: 'Error', description: 'Servicio de autenticación no disponible.', variant: 'destructive' });
+    if (!auth || !firestore) {
+       toast({ title: 'Error', description: 'Servicio de autenticación o base de datos no disponible.', variant: 'destructive' });
        setIsLoading(false);
        return;
     }
 
     try {
         if (isSignup) {
-            // --- REGISTRO (CLIENT-SIDE) ---
             if (password.length < 6) {
                 throw { code: 'auth/weak-password' };
             }
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
             
-            // Call server action to create Firestore documents
-            await createUserProfile({ 
-              userId: userCredential.user.uid, 
-              email: userCredential.user.email ?? '' 
+            // --- Create User Profile (Client-Side) ---
+            const userDocRef = doc(firestore, 'users', user.uid);
+            await setDoc(userDocRef, {
+              email: user.email,
+              createdAt: new Date().toISOString(),
             });
+
+            // Check if any other admins exist. If not, make this user an admin.
+            const adminRolesCollection = collection(firestore, 'roles_admin');
+            const adminSnapshot = await getDocs(adminRolesCollection);
+
+            if (adminSnapshot.empty) {
+                const adminRoleRef = doc(firestore, 'roles_admin', user.uid);
+                await setDoc(adminRoleRef, {
+                    isAdmin: true,
+                    assignedAt: new Date().toISOString()
+                });
+            }
             
             toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
             setIsSignup(false); // Switch to login view
         } else {
-            // --- INICIO DE SESIÓN (CLIENT-SIDE) ---
             await signInWithEmailAndPassword(auth, email, password);
             toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
             router.push('/chat');
@@ -68,6 +81,9 @@ export default function LoginForm() {
             case 'auth/weak-password':
                 message = 'La contraseña no es válida. Debe tener al menos 6 caracteres.';
                 break;
+            case 'permission-denied':
+                 message = 'Error de permisos al crear el perfil. Revisa las reglas de Firestore.'
+                 break;
             default:
                 message = `Error de autenticación: ${error.message}`;
                 break;
