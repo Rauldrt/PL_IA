@@ -3,15 +3,14 @@
 import { z } from 'zod';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, setDoc, writeBatch } from 'firebase/firestore';
-import { getFirestore } from 'firebase-admin/firestore';
+import { doc, setDoc, writeBatch, getDoc, getFirestore } from 'firebase-admin/firestore';
+
 
 const schema = z.object({
   email: z.string().email({ message: 'El email no es válido.' }),
   password: z.string().min(6, { message: 'La contraseña debe tener al menos 6 caracteres.' }),
 });
 
-// This function now returns the created UserRecord on success
 export async function signup(
   prevState: { message: string; success: boolean, userRecord?: UserRecord },
   formData: FormData
@@ -73,6 +72,7 @@ export async function signup(
     await batch.commit();
     return { message: 'Usuario creado con éxito y asignado como administrador.', success: true, userRecord };
   } catch (error: any) {
+    console.error('Firestore batch commit error:', error);
     let message = 'No se pudo crear el perfil y rol del usuario en la base de datos. ';
     if (error.code === 'permission-denied') {
         message += 'Verifica las reglas de seguridad de Firestore.';
@@ -85,11 +85,49 @@ export async function signup(
   }
 }
 
+export async function handleGoogleSignIn(uid: string, email: string): Promise<{ success: boolean; message: string }> {
+  const app = initializeFirebaseAdmin();
+  const firestore = getFirestore(app);
+
+  const userDocRef = doc(firestore, 'users', uid);
+
+  try {
+    const userDoc = await getDoc(userDocRef);
+
+    // If user document doesn't exist, it's a first-time Google Sign-In
+    if (!userDoc.exists()) {
+      const batch = writeBatch(firestore);
+
+      const newUserdata = {
+        email,
+        createdAt: new Date().toISOString(),
+      };
+      batch.set(userDocRef, newUserdata);
+
+      const adminRoleRef = doc(firestore, 'roles_admin', uid);
+      const adminData = {
+        isAdmin: true,
+        assignedAt: new Date().toISOString(),
+      };
+      batch.set(adminRoleRef, adminData);
+
+      await batch.commit();
+      return { success: true, message: 'Nuevo usuario de Google creado y asignado como administrador.' };
+    }
+
+    // User already exists, just a regular sign-in
+    return { success: true, message: 'Usuario de Google existente ha iniciado sesión.' };
+  } catch (error: any) {
+    console.error('Google Sign-In server error:', error);
+    return { success: false, message: 'No se pudo procesar el inicio de sesión de Google en el servidor.' };
+  }
+}
+
 
 export async function login(
   prevState: { message: string; success: boolean },
   formData: FormData
-): Promise<{ message: string; success: boolean }> {
+): Promise<{ message:string; success: boolean }> {
   // This is a placeholder. The actual login logic is handled on the client in LoginForm.tsx
   // to correctly manage the auth state.
   return {
