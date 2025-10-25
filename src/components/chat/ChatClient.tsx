@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getSuggestedMessages } from '@/lib/actions';
 import { chat } from '@/ai/flows/chat';
@@ -22,15 +22,36 @@ export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggested, setSuggested] = useState<string[]>([]);
   const [knowledge, setKnowledge] = useState('');
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const firestore = useFirestore();
 
+  const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
+    if (messages.length > 0) return;
+
+    setIsLoadingSuggestions(true);
+    try {
+      const result = await getSuggestedMessages(knowledgeContent);
+      if (result.messages) {
+        setSuggested(result.messages);
+      } else if (result.error) {
+        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Error fetching suggested messages:', error);
+      toast({ title: 'Error', description: 'No se pudieron cargar las sugerencias.', variant: 'destructive' });
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [messages.length, toast]);
+
   useEffect(() => {
     const fetchKnowledge = async () => {
       if (!firestore) return;
+      setIsLoading(true);
       const knowledgeCollection = collection(firestore, 'knowledgeSources');
       try {
         const knowledgeSnapshot = await getDocs(knowledgeCollection);
@@ -39,51 +60,29 @@ export default function ChatClient() {
           allContent += doc.data().content + '\n\n';
         });
         setKnowledge(allContent);
+        // Fetch suggestions once knowledge is loaded
+        fetchSuggestions(allContent);
       } catch (error: any) {
-        // Create and emit the detailed permission error
         if (error.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: knowledgeCollection.path,
-            operation: 'list', // 'list' for collection queries
+            operation: 'list',
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-
-        // Show a user-friendly toast, while the developer sees the detailed error overlay
         toast({
           title: 'Error de Conocimiento',
-          description: 'No se pudo cargar la base de conocimiento debido a un problema de permisos.',
+          description: 'No se pudo cargar la base de conocimiento.',
           variant: 'destructive',
         });
-      }
-    };
-
-    fetchKnowledge();
-  }, [firestore, toast]);
-  
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      // Don't fetch suggestions if there are already messages
-      if (messages.length > 0) return;
-
-      setIsLoading(true);
-      try {
-        const result = await getSuggestedMessages();
-        if (result.messages) {
-          setSuggested(result.messages);
-        } else if (result.error) {
-          toast({ title: 'Error', description: result.error, variant: 'destructive' });
-        }
-      } catch (error) {
-        console.error('Error fetching suggested messages:', error);
-        toast({ title: 'Error', description: 'No se pudieron cargar las sugerencias.', variant: 'destructive' });
       } finally {
         setIsLoading(false);
       }
     };
-    fetchSuggestions();
-  }, [toast, messages.length]);
+
+    fetchKnowledge();
+  }, [firestore, toast, fetchSuggestions]);
+  
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -109,7 +108,8 @@ export default function ChatClient() {
 
       const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: aiResponse.response };
       setMessages((prev) => [...prev, newAiMessage]);
-    } catch (e) {
+    } catch (e)  {
+      console.error('Chat error:', e);
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
       setMessages((prev) => prev.slice(0, -1)); // Remove user message on error
     } finally {
@@ -126,8 +126,12 @@ export default function ChatClient() {
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-              {messages.length === 0 && !isLoading ? (
-                <WelcomeScreen suggestedMessages={suggested} onSuggestionClick={handleSendMessage} />
+              {messages.length === 0 ? (
+                <WelcomeScreen 
+                  suggestedMessages={suggested} 
+                  onSuggestionClick={handleSendMessage}
+                  isLoading={isLoadingSuggestions || isLoading}
+                />
               ) : (
                 messages.map((m) => <MessageBubble key={m.id} message={m} />)
               )}

@@ -28,9 +28,9 @@ export async function sendMessage(history: Message[], newMessage: string) {
   }
 }
 
-export async function getSuggestedMessages(): Promise<{messages?: string[], error?: string}> {
+export async function getSuggestedMessages(knowledge?: string): Promise<{messages?: string[], error?: string}> {
   try {
-    const suggestions: SuggestedMessagesOutput = await getSuggestions();
+    const suggestions: SuggestedMessagesOutput = await getSuggestions({ knowledge });
     return { messages: suggestions.messages };
   } catch (error) {
     console.error('Error getting suggested messages:', error);
