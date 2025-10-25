@@ -126,8 +126,6 @@ export default function AdminPage() {
         setFileName('');
       })
       .catch((serverError) => {
-        console.error("Error adding document: ", serverError);
-
         if (serverError.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
               path: knowledgeCollection.path,
@@ -135,13 +133,8 @@ export default function AdminPage() {
               requestResourceData: knowledgeData,
             });
             errorEmitter.emit('permission-error', permissionError);
-            
-            toast({
-                title: 'Error de Permiso',
-                description: 'No tienes permiso para agregar fuentes de conocimiento.',
-                variant: 'destructive',
-            });
         } else {
+            console.error("Error adding document: ", serverError);
             toast({
                 title: 'Error al Guardar',
                 description: serverError.message || 'No se pudo guardar la fuente de conocimiento.',
