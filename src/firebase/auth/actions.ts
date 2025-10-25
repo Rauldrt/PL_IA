@@ -40,18 +40,18 @@ async function firebaseAdminAction(
       return { message: 'Usuario creado con éxito.', success: true };
     } else {
       // For login, we can't directly sign in on the server.
-      // We return a success, and the client will handle the sign-in.
-      // A more robust solution might involve custom tokens, but this works for now.
+      // We just check if user exists by trying to get it.
+      await auth.getUserByEmail(email);
       return { message: 'Proceed to login.', success: true };
     }
   } catch (error: any) {
     let message = 'Ocurrió un error inesperado.';
     if (error.code === 'auth/email-already-exists') {
       message = 'Este email ya está registrado.';
-    } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+    } else if (error.code === 'auth/user-not-found') {
         message = 'Email o contraseña incorrectos.';
     }
-    console.error('Firebase Admin Error:', error.message);
+    console.error('Firebase Admin Error:', error.code, error.message);
     return { message, success: false };
   }
 }
@@ -60,10 +60,7 @@ export async function login(
   formState: { message: string; success: boolean },
   formData: FormData
 ): Promise<{ message: string; success: boolean }> {
-    // This is a client-side concern. We are simply validating the user exists.
-    // The actual sign in will happen on the client.
-    // In a real app you might use custom tokens.
-    return { success: true, message: '' };
+    return firebaseAdminAction(formState, formData, 'login');
 }
 
 export async function signup(

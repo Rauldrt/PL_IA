@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { login, signup } from '@/firebase/auth/actions';
+import { useAuth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 function SubmitButton({ isSignup }: { isSignup: boolean }) {
   const { pending } = useFormStatus();
@@ -30,19 +32,34 @@ function SubmitButton({ isSignup }: { isSignup: boolean }) {
 
 export default function LoginForm() {
   const [isSignup, setIsSignup] = React.useState(false);
-  const [loginState, loginAction] = useFormState(login, { message: '', success: false });
-  const [signupState, signupAction] = useFormState(signup, { message: '', success: false });
+  const [loginState, loginAction] = React.useActionState(login, { message: '', success: false });
+  const [signupState, signupAction] = React.useActionState(signup, { message: '', success: false });
   const router = useRouter();
   const { toast } = useToast();
+  const auth = useAuth();
 
   React.useEffect(() => {
     if (loginState.success) {
-      toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
-      router.push('/chat');
-    } else if (loginState.message) {
+      const form = document.querySelector('form') as HTMLFormElement;
+      const formData = new FormData(form);
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+      
+      if(email && password) {
+        signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
+          router.push('/chat');
+        })
+        .catch((error) => {
+          toast({ title: 'Error de inicio de sesión', description: 'Email o contraseña incorrectos.', variant: 'destructive' });
+        });
+      }
+
+    } else if (loginState.message && !loginState.success && loginState.message !== '') {
       toast({ title: 'Error de inicio de sesión', description: loginState.message, variant: 'destructive' });
     }
-  }, [loginState, router, toast]);
+  }, [loginState, router, toast, auth]);
 
   React.useEffect(() => {
     if (signupState.success) {
