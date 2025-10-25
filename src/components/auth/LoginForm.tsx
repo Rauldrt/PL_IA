@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,75 +8,75 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { signup } from '@/firebase/auth/actions';
 import { useAuth } from '@/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-
-function SubmitButton({ isSignup }: { isSignup: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" size="lg" disabled={pending}>
-      {pending ? (
-        <LoaderCircle className="animate-spin" />
-      ) : isSignup ? (
-        'Crear Cuenta'
-      ) : (
-        <>
-          Iniciar Sesión <ArrowRight />
-        </>
-      )}
-    </Button>
-  );
-}
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserProfile } from '@/firebase/auth/actions';
 
 export default function LoginForm() {
   const [isSignup, setIsSignup] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
   const router = useRouter();
   const { toast } = useToast();
   const auth = useAuth();
 
-  // Action for SIGNUP (Server Action)
-  const handleSignupAction = async (prevState: any, formData: FormData) => {
-    const result = await signup(prevState, formData);
-    if (result.success) {
-      toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
-      setIsSignup(false); // Switch back to login form
-    } else if (result.message) {
-      toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
-    }
-    return result;
-  };
-  
-  const [signupState, signupFormAction] = useActionState(handleSignupAction, { message: '', success: false });
-
-  // Handler for LOGIN (Client-side)
-  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAuthAction = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
     if (!auth) {
        toast({ title: 'Error', description: 'Servicio de autenticación no disponible.', variant: 'destructive' });
+       setIsLoading(false);
        return;
     }
+
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
-        router.push('/chat');
+        if (isSignup) {
+            // --- REGISTRO (CLIENT-SIDE) ---
+            if (password.length < 6) {
+                throw { code: 'auth/weak-password' };
+            }
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            
+            // Call server action to create Firestore documents
+            await createUserProfile({ 
+              userId: userCredential.user.uid, 
+              email: userCredential.user.email ?? '' 
+            });
+            
+            toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
+            setIsSignup(false); // Switch to login view
+        } else {
+            // --- INICIO DE SESIÓN (CLIENT-SIDE) ---
+            await signInWithEmailAndPassword(auth, email, password);
+            toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
+            router.push('/chat');
+        }
     } catch (error: any) {
-         let message = 'Ocurrió un error inesperado.';
-          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-              message = 'El email o la contraseña son incorrectos.';
-          } else {
-              message = `Error de inicio de sesión: ${error.message}`;
-          }
-        toast({ title: 'Error de inicio de sesión', description: message, variant: 'destructive' });
+        let message = 'Ocurrió un error inesperado.';
+        switch (error.code) {
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+            case 'auth/invalid-credential':
+                message = 'El email o la contraseña son incorrectos.';
+                break;
+            case 'auth/email-already-in-use':
+                message = 'Este email ya está registrado. Por favor, intenta iniciar sesión.';
+                break;
+            case 'auth/weak-password':
+                message = 'La contraseña no es válida. Debe tener al menos 6 caracteres.';
+                break;
+            default:
+                message = `Error de autenticación: ${error.message}`;
+                break;
+        }
+        toast({ title: isSignup ? 'Error de registro' : 'Error de inicio de sesión', description: message, variant: 'destructive' });
+    } finally {
+        setIsLoading(false);
     }
   };
-  
-  // Decide which form handler to use
-  const formAction = isSignup ? signupFormAction : handleLogin;
 
   return (
     <Card className="w-full">
@@ -92,30 +91,31 @@ export default function LoginForm() {
                 </span>
             </div>
         </div>
-        <form action={isSignup ? signupFormAction : undefined} onSubmit={isSignup ? undefined : handleLogin} className="space-y-4">
+        <form onSubmit={handleAuthAction} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" placeholder="tu@email.com" required />
+                <Input id="email" name="email" type="email" placeholder="tu@email.com" required disabled={isLoading} />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="password">Contraseña</Label>
-                <Input id="password" name="password" type="password" required />
+                <Input id="password" name="password" type="password" required disabled={isLoading}/>
             </div>
-            {/* The form hook only works when a server action is passed to the form's `action` prop.
-                For client-side submissions, we can't use useFormStatus, so we'll just show the default button.
-                A more advanced implementation could use state to manage the loading status for client-side login.
-             */}
-             {isSignup ? (
-                <SubmitButton isSignup={isSignup} />
-             ) : (
-                <Button type="submit" className="w-full" size="lg">
+            
+            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+                {isLoading ? (
+                    <LoaderCircle className="animate-spin" />
+                ) : isSignup ? (
+                    'Crear Cuenta'
+                ) : (
+                    <>
                     Iniciar Sesión <ArrowRight />
-                </Button>
-             )}
+                    </>
+                )}
+            </Button>
         </form>
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
-        <Button variant="link" type="button" onClick={() => setIsSignup(!isSignup)}>
+        <Button variant="link" type="button" onClick={() => setIsSignup(!isSignup)} disabled={isLoading}>
           {isSignup ? '¿Ya tienes una cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
         </Button>
       </CardFooter>

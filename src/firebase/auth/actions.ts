@@ -1,94 +1,59 @@
 'use server';
 
-import { z } from 'zod';
-import { getAuth, UserRecord } from 'firebase-admin/auth';
-import { initializeFirebaseAdmin } from '@/firebase/admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { initializeFirebaseAdmin } from '@/firebase/admin';
+import { z } from 'zod';
 
-const schema = z.object({
-  email: z.string().email({ message: 'El email no es válido.' }),
-  password: z.string().min(6, { message: 'La contraseña debe tener al menos 6 caracteres.' }),
+const UserProfileSchema = z.object({
+  userId: z.string(),
+  email: z.string().email(),
 });
 
-export async function signup(
-  prevState: { message: string; success: boolean },
-  formData: FormData
-): Promise<{ message: string; success: boolean }> {
-  const validatedFields = schema.safeParse({
-    email: formData.get('email'),
-    password: formData.get('password'),
-  });
+/**
+ * Creates user profile documents in Firestore after successful client-side registration.
+ * This is a secure server-side operation.
+ */
+export async function createUserProfile(input: { userId: string; email: string; }) {
+  const validatedFields = UserProfileSchema.safeParse(input);
 
   if (!validatedFields.success) {
-    const errors = validatedFields.error.flatten().fieldErrors;
-    const message = errors.email?.[0] || errors.password?.[0] || 'Datos inválidos.';
-    return {
-      message,
-      success: false,
-    };
+    throw new Error('Invalid user data provided.');
   }
 
-  const { email, password } = validatedFields.data;
+  const { userId, email } = validatedFields.data;
   const app = initializeFirebaseAdmin();
-  const auth = getAuth(app);
   const firestore = getFirestore(app);
-
-  let userRecord: UserRecord;
-  try {
-    userRecord = await auth.createUser({
-      email,
-      password,
-    });
-  } catch (error: any) {
-    let message = 'Ocurrió un error inesperado durante el registro.';
-    if (error.code === 'auth/email-already-exists') {
-      message = 'Este email ya está registrado. Por favor, intenta iniciar sesión.';
-    } else if (error.code === 'auth/invalid-password') {
-        message = 'La contraseña no es válida. Debe tener al menos 6 caracteres.';
-    }
-    return { message, success: false };
-  }
-
   const batch = firestore.batch();
 
-  // Create user profile in Firestore
-  const userDocRef = firestore.collection('users').doc(userRecord.uid);
+  // 1. Create user profile document
+  const userDocRef = firestore.collection('users').doc(userId);
   const userData = {
-      email: userRecord.email,
-      createdAt: new Date().toISOString(),
+    email: email,
+    createdAt: new Date().toISOString(),
   };
   batch.set(userDocRef, userData);
 
-  // By default, make the first user an admin.
-  // In a real app, you'd have a more robust way to manage roles.
-  const adminRoleRef = firestore.collection('roles_admin').doc(userRecord.uid);
-  const adminData = {
-      isAdmin: true, // Make first user admin
+  // 2. Check if any other admins exist. If not, make this user an admin.
+  const adminRolesCollection = firestore.collection('roles_admin');
+  const adminSnapshot = await adminRolesCollection.limit(1).get();
+  
+  if (adminSnapshot.empty) {
+    const adminRoleRef = adminRolesCollection.doc(userId);
+    const adminData = {
+      isAdmin: true,
       assignedAt: new Date().toISOString()
-  };
-  batch.set(adminRoleRef, adminData);
+    };
+    batch.set(adminRoleRef, adminData);
+  }
 
-
+  // Commit all changes to Firestore
   try {
     await batch.commit();
-    return { message: 'Usuario creado con éxito.', success: true };
-  } catch (error: any) {
-    console.error('Error committing batch:', error);
-    // If the batch fails, we must delete the user from Auth to avoid a dangling account.
-    await auth.deleteUser(userRecord.uid);
-    return { message: 'No se pudo crear el perfil del usuario en la base de datos.', success: false };
+    return { success: true, message: 'User profile created successfully.' };
+  } catch (error) {
+    console.error('Error creating user profile in Firestore:', error);
+    // In a real app, you might want to trigger a cleanup of the auth user 
+    // if the Firestore transaction fails, but for now we log the error.
+    throw new Error('Failed to save user profile to database.');
   }
-}
-
-
-export async function login(
-  prevState: { message: string; success: boolean },
-  formData: FormData
-): Promise<{ message:string; success: boolean }> {
-  // This is a placeholder. The actual login logic is handled on the client in LoginForm.tsx
-  // to correctly manage the auth state.
-  return {
-      message: 'El inicio de sesión se maneja en el cliente.',
-      success: true 
-  };
 }
