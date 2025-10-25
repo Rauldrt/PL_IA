@@ -60,7 +60,7 @@ export default function LoginForm() {
                 });
             }
             
-            toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
+            toast({ description: 'Usuario creado con éxito' });
             setIsSignup(false); // Switch to login view
         } else {
             await signInWithEmailAndPassword(auth, email, password);
