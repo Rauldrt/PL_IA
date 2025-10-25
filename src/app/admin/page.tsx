@@ -125,12 +125,10 @@ export default function AdminPage() {
         setUrl('');
         setFileName('');
       })
-      .catch((error) => {
-        // Log the actual error to the console for debugging
-        console.error("Error adding document: ", error);
+      .catch((serverError) => {
+        console.error("Error adding document: ", serverError);
 
-        // Check if it's a permission error specifically
-        if (error.code === 'permission-denied') {
+        if (serverError.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
               path: knowledgeCollection.path,
               operation: 'create',
@@ -138,17 +136,15 @@ export default function AdminPage() {
             });
             errorEmitter.emit('permission-error', permissionError);
             
-            // The FirebaseErrorListener will throw, but we also show a toast as fallback.
             toast({
                 title: 'Error de Permiso',
                 description: 'No tienes permiso para agregar fuentes de conocimiento.',
                 variant: 'destructive',
             });
         } else {
-            // For any other kind of error
             toast({
                 title: 'Error al Guardar',
-                description: error.message || 'No se pudo guardar la fuente de conocimiento.',
+                description: serverError.message || 'No se pudo guardar la fuente de conocimiento.',
                 variant: 'destructive',
             });
         }

@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const schema = z.object({
@@ -51,21 +51,29 @@ export async function signup(
     return { message, success: false };
   }
 
-  // Create a user profile document in Firestore
+  // Create user profile and admin role in a batch write
+  const batch = writeBatch(firestore);
+
   const userDocRef = doc(firestore, 'users', userRecord.uid);
   const userData = {
       email: userRecord.email,
       createdAt: new Date().toISOString(),
   };
+  batch.set(userDocRef, userData);
+
+  const adminRoleRef = doc(firestore, 'roles_admin', userRecord.uid);
+  const adminData = {
+    isAdmin: true,
+    assignedAt: new Date().toISOString(),
+  };
+  batch.set(adminRoleRef, adminData);
+
 
   try {
-    await setDoc(userDocRef, userData);
-    return { message: 'Usuario creado con éxito.', success: true, userRecord };
+    await batch.commit();
+    return { message: 'Usuario creado con éxito y asignado como administrador.', success: true, userRecord };
   } catch (error: any) {
-    // This is where a permission error on the Firestore write would be caught
-    // While we can't emit a client-side error from a server action,
-    // we can return a more specific message.
-    let message = 'No se pudo crear el perfil de usuario en la base de datos. ';
+    let message = 'No se pudo crear el perfil y rol del usuario en la base de datos. ';
     if (error.code === 'permission-denied') {
         message += 'Verifica las reglas de seguridad de Firestore.';
     } else {
@@ -77,9 +85,7 @@ export async function signup(
   }
 }
 
-// Note: The login server action is not strictly necessary for client-side login,
-// but can be useful for server-side checks if needed in the future.
-// For now, we'll keep it simple and rely on the client-side `signInWithEmailAndPassword`.
+
 export async function login(
   prevState: { message: string; success: boolean },
   formData: FormData
@@ -91,5 +97,3 @@ export async function login(
       success: true 
   };
 }
-
-    
