@@ -22,8 +22,15 @@ export default function AuthChatHeader() {
     const checkAdminStatus = async () => {
       if (user && firestore) {
         const adminRoleDoc = doc(firestore, `roles_admin/${user.uid}`);
-        const docSnap = await getDoc(adminRoleDoc);
-        setIsAdmin(docSnap.exists());
+        try {
+            const docSnap = await getDoc(adminRoleDoc);
+            setIsAdmin(docSnap.exists());
+        } catch (error) {
+            console.error("Error checking admin status:", error);
+            setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
       }
     };
     checkAdminStatus();

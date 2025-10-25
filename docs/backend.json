@@ -6,24 +6,20 @@
       "type": "object",
       "description": "Represents a user of the Conecta IA application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the User entity."
-        },
         "email": {
           "type": "string",
           "description": "Email address of the user.",
           "format": "email"
         },
-        "isAdmin": {
-          "type": "boolean",
-          "description": "Indicates if the user has administrator privileges."
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the user account was created."
         }
       },
       "required": [
-        "id",
         "email",
-        "isAdmin"
+        "createdAt"
       ]
     },
     "Session": {
@@ -32,10 +28,6 @@
       "type": "object",
       "description": "Represents a user's session with the Gemini AI.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Session entity."
-        },
         "userId": {
           "type": "string",
           "description": "Reference to User. (Relationship: User 1:N Session)"
@@ -52,7 +44,6 @@
         }
       },
       "required": [
-        "id",
         "userId",
         "startTime"
       ]
@@ -63,10 +54,6 @@
       "type": "object",
       "description": "Represents a single message within a session.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Message entity."
-        },
         "sessionId": {
           "type": "string",
           "description": "Reference to Session. (Relationship: Session 1:N Message)"
@@ -83,14 +70,9 @@
           "type": "string",
           "description": "Timestamp indicating when the message was sent.",
           "format": "date-time"
-        },
-        "sentiment": {
-          "type": "number",
-          "description": "Sentiment score of the message (e.g., -1 to 1)."
         }
       },
       "required": [
-        "id",
         "sessionId",
         "sender",
         "content",
@@ -103,14 +85,6 @@
       "type": "object",
       "description": "Represents a source of knowledge added to the Gemini AI.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the KnowledgeSource entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User who added the source. (Relationship: User 1:N KnowledgeSource)"
-        },
         "name": {
           "type": "string",
           "description": "The name or title of the knowledge source."
@@ -131,10 +105,22 @@
         }
       },
       "required": [
-        "id",
-        "userId",
-        "name"
+        "name",
+        "uploadDate"
       ]
+    },
+    "AdminRole": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AdminRole",
+      "type": "object",
+      "description": "A document in the 'roles_admin' collection indicates that the user has admin privileges.",
+      "properties": {
+        "isAdmin": {
+            "type": "boolean",
+            "description": "Must be true to indicate admin role."
+        }
+      },
+      "required": ["isAdmin"]
     }
   },
   "auth": {
@@ -149,15 +135,9 @@
         "definition": {
           "entityName": "User",
           "schema": {
-            "$ref": "#/backend/entities/User"
+            "$ref": "#/entities/User"
           },
-          "description": "Stores user profiles. Accessible only by the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            }
-          ]
+          "description": "Stores user profiles. Accessible only by the user themselves."
         }
       },
       {
@@ -165,19 +145,9 @@
         "definition": {
           "entityName": "Session",
           "schema": {
-            "$ref": "#/backend/entities/Session"
+            "$ref": "#/entities/Session"
           },
-          "description": "Stores user sessions. Accessible only by the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            },
-            {
-              "name": "sessionId",
-              "description": "The unique identifier of the session."
-            }
-          ]
+          "description": "Stores user sessions. Accessible only by the user themselves."
         }
       },
       {
@@ -185,23 +155,9 @@
         "definition": {
           "entityName": "Message",
           "schema": {
-            "$ref": "#/backend/entities/Message"
+            "$ref": "#/entities/Message"
           },
-          "description": "Stores messages within a session. Accessible only by the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            },
-            {
-              "name": "sessionId",
-              "description": "The unique identifier of the session."
-            },
-            {
-              "name": "messageId",
-              "description": "The unique identifier of the message."
-            }
-          ]
+          "description": "Stores messages within a session. Accessible only by the user themselves."
         }
       },
       {
@@ -209,34 +165,21 @@
         "definition": {
           "entityName": "KnowledgeSource",
           "schema": {
-            "$ref": "#/backend/entities/KnowledgeSource"
+            "$ref": "#/entities/KnowledgeSource"
           },
-          "description": "Stores knowledge sources added to the Gemini AI. Accessible only by admin users.",
-          "params": [
-            {
-              "name": "knowledgeSourceId",
-              "description": "The unique identifier of the knowledge source."
-            }
-          ]
+          "description": "Stores knowledge sources added to the Gemini AI. Accessible only by admin users."
         }
       },
       {
         "path": "/roles_admin/{userId}",
         "definition": {
-          "entityName": "adminRole",
+          "entityName": "AdminRole",
           "schema": {
-            "$ref": "#/backend/entities/User"
+            "$ref": "#/entities/AdminRole"
           },
-          "description": "A document in this collection indicates that the user has admin privileges.  Existence of the document is sufficient; content is irrelevant.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            }
-          ]
+          "description": "A document in this collection indicates that the user has admin privileges."
         }
       }
-    ],
-    "reasoning": "The Firestore structure is designed to ensure authorization independence, clarity, and scalability for the Conecta IA application. It leverages path-based ownership for user-related data (sessions, messages, knowledge sources) and a dedicated collection for admin roles.  The structure is optimized for secure list operations (QAPs) and avoids hierarchical authorization dependencies by denormalizing authorization context where needed.\n\n*   **Users:** User profiles are stored in the `/users/{userId}` collection.  The `isAdmin` field determines administrative privileges.\n*   **Sessions & Messages:** Sessions and messages are nested under `/users/{userId}/sessions/{sessionId}/messages/{messageId}`.  This enforces clear ownership and simplifies security rules based on the authenticated user.\n*   **Knowledge Sources:** Knowledge sources, managed by admins, are stored in `/knowledgeSources/{knowledgeSourceId}`.  Access is restricted to admin users, verified by the presence of their UID in the `/roles_admin/{uid}` collection. This design centralizes admin role management and avoids reading the user document.\n\nThis design ensures that security rules can be written without relying on `get()` calls, crucial for atomic operations (transactions/batches) and debugging. Specifically, authorization is based on `request.auth.uid` and the document path.\n\nQAPs are supported through structural segregation. Private user data resides under `/users/{userId}`, allowing listing only for the authenticated user.  Admin-managed knowledge sources reside in `/knowledgeSources`, secured by checking admin role in rules."
+    ]
   }
 }

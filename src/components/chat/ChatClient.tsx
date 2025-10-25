@@ -24,7 +24,6 @@ export default function ChatClient() {
   const [knowledge, setKnowledge] = useState('');
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { user } = useUser();
   const firestore = useFirestore();
 
   useEffect(() => {
@@ -54,6 +53,9 @@ export default function ChatClient() {
 
   useEffect(() => {
     const fetchSuggestions = async () => {
+      // Don't fetch suggestions if there are already messages
+      if (messages.length > 0) return;
+
       setIsLoading(true);
       try {
         const result = await getSuggestedMessages();
@@ -70,7 +72,7 @@ export default function ChatClient() {
       }
     };
     fetchSuggestions();
-  }, [toast]);
+  }, [toast, messages.length]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -89,7 +91,7 @@ export default function ChatClient() {
 
     try {
       const aiResponse = await chat({
-        history: messages,
+        history: messages.slice(-10), // Pass last 10 messages for context
         message: trimmedMessage,
         knowledge: knowledge,
       });
@@ -98,7 +100,7 @@ export default function ChatClient() {
       setMessages((prev) => [...prev, newAiMessage]);
     } catch (e) {
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
-      setMessages((prev) => prev.slice(0, -1));
+      setMessages((prev) => prev.slice(0, -1)); // Remove user message on error
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +120,7 @@ export default function ChatClient() {
               ) : (
                 messages.map((m) => <MessageBubble key={m.id} message={m} />)
               )}
-              {isLoading && (
+              {isLoading && messages.length > 0 && (
                 <div className="flex items-start gap-4 py-4 justify-start">
                   <Avatar className="h-8 w-8 border">
                     {aiAvatar && <AvatarImage src={aiAvatar.imageUrl} alt="AI Avatar" data-ai-hint={aiAvatar.imageHint} />}

@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle, FileUp, FileText } from 'lucide-react';
-import ChatHeader from '@/components/chat/ChatHeader';
+import AuthChatHeader from '@/components/auth/ChatHeader';
 
 // Configure the worker for pdfjs-dist
 if (typeof window !== 'undefined') {
@@ -91,10 +91,19 @@ export default function AdminPage() {
       });
       return;
     }
+    
+    if (!firestore) {
+      toast({
+        title: 'Error de Firestore',
+        description: 'No se pudo inicializar la base de datos. Inténtalo de nuevo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      if (!firestore) throw new Error('Firestore is not initialized');
       const knowledgeCollection = collection(firestore, 'knowledgeSources');
       await addDoc(knowledgeCollection, {
         name,
@@ -113,9 +122,13 @@ export default function AdminPage() {
       setFileName('');
     } catch (error: any) {
       console.error('Error adding knowledge source:', error);
+      let errorMessage = 'No se pudo guardar la fuente de conocimiento.';
+      if (error.code === 'permission-denied') {
+        errorMessage = 'No tienes permiso para realizar esta acción. Solo los administradores pueden agregar conocimiento.';
+      }
       toast({
         title: 'Error de Firestore',
-        description: error.message || 'No se pudo guardar la fuente de conocimiento. Revisa los permisos y la conexión.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -125,7 +138,7 @@ export default function AdminPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <ChatHeader />
+      <AuthChatHeader />
       <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="mx-auto max-w-2xl">
           <Card>
