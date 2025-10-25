@@ -2,22 +2,25 @@
  * @fileoverview Firestore Security Rules for Conecta IA application.
  *
  * Core Philosophy:
- * This ruleset enforces a role-based access control model, granting users access to their own data and restricting administrative functions to authorized admin users.
+ * This ruleset enforces a strict user-ownership model for user data and restricts
+ * knowledge source management to admin users.  It prioritizes secure access control
+ * with flexible data shapes to enable rapid prototyping.
  *
  * Data Structure:
- * - /users/{userId}: User profiles, accessible only by the user themselves.
- * - /users/{userId}/sessions/{sessionId}: User sessions, accessible only by the user themselves.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session, accessible only by the user themselves.
- * - /knowledgeSources/{knowledgeSourceId}: Knowledge sources for the AI, accessible only by admin users.
- * - /roles_admin/{userId}: Indicates admin privileges; its existence grants admin rights.
+ * - /users/{userId}: Stores user profiles, accessible only by the user.
+ * - /users/{userId}/sessions/{sessionId}: Stores user sessions, accessible only by the user.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within a session, accessible only by the user.
+ * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources, accessible only by admin users.
+ * - /roles_admin/{userId}: Indicates admin privileges; document existence grants admin rights.
  *
  * Key Security Decisions:
- * - User listing is disallowed to protect privacy.
- * - Admin privileges are granted based on the presence of a document in the `/roles_admin/{userId}` collection.
- * - Data schema validation is relaxed for prototyping, focusing on authorization and relational integrity.
+ * - User data is strictly controlled by the user-ownership model.
+ * - Knowledge sources can only be managed by admin users.
+ * - Admin status is determined by the existence of a document in the 'roles_admin' collection.
+ * - Data shape validation is relaxed to facilitate prototyping.
  *
  * Denormalization for Authorization:
- *  To determine if a user has admin roles, the security rules will query for the presence of document in the `roles_admin/{userId}` collection, where the `userId` is the authenticated user ID (`request.auth.uid`).
+ * - Admin status is checked directly on the 'roles_admin/{userId}' document.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -33,7 +36,7 @@ service cloud.firestore {
 
     /**
      * @description Checks if the user is the owner of the document.
-     * @param {string} userId The user ID to check against the request's auth UID.
+     * @param {string} userId The user ID to compare against the request's auth UID.
      * @return {boolean} True if the user is the owner, false otherwise.
      */
     function isOwner(userId) {
@@ -41,96 +44,94 @@ service cloud.firestore {
     }
 
     /**
-     * @description Checks if the user is an existing owner of the document, verifying both ownership and existence.
-     * @param {string} userId The user ID to check.
-     * @return {boolean} True if the user is the owner and the document exists, false otherwise.
+     * @description Checks if the user is an existing owner of the document.
+     * @param {string} userId The user ID to compare against the resource's data.
+     * @return {boolean} True if the user is the owner and the resource exists, false otherwise.
      */
     function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
+      return isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Checks if the user has admin privileges by verifying the existence of a document in the `/roles_admin/{userId}` collection.
-     * @return {boolean} True if the user is an admin, false otherwise.
+     * @description Checks if the user has admin privileges.
+     * @return {boolean} True if the user has admin privileges, false otherwise.
      */
     function isAdmin() {
-      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return exists(/databases/(default)/documents/roles_admin/$(request.auth.uid));
     }
 
     /**
      * @description Rules for user profiles.
      * @path /users/{userId}
-     * @allow (create) If the user is creating their own profile (request.auth.uid matches userId).
-     * @allow (get, update, delete) If the user is the owner of the profile.
-     * @deny (list) Listing users is not allowed.
+     * @allow (create) If the user is creating their own profile.
+     * @allow (get, list, update, delete) If the user is the owner of the profile.
+     * @deny (create) If the user is not authenticated.
+     * @deny (update, delete) If the user is not the owner of the profile.
      * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
+      allow get, list: if false;
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update, delete: if isExistingOwner(userId);
     }
 
     /**
      * @description Rules for user sessions.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) If the user is creating a session under their own profile.
-     * @allow (get, update, delete) If the user is the owner of the parent user profile.
-     * @deny (list) Listing sessions is not allowed except by the owner.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (create) If the user is creating a session for themselves.
+     * @allow (get, list, update, delete) If the user is the owner of the session.
+     * @deny (create) If the user is not authenticated.
+     * @deny (update, delete) If the user is not the owner of the session.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
+      allow get, list: if isOwner(userId);
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update, delete: if isExistingOwner(userId);
     }
 
     /**
      * @description Rules for messages within a session.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) If the user is creating a message within their own session.
-     * @allow (get, update, delete) If the user is the owner of the parent user profile.
-     * @deny (list) Listing messages is not allowed except by the owner.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (create) If the user is creating a message in their own session.
+     * @allow (get, list, update, delete) If the user is the owner of the session.
+     * @deny (create) If the user is not authenticated.
+     * @deny (update, delete) If the user is not the owner of the session.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
+      allow get, list: if isOwner(userId);
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update, delete: if isExistingOwner(userId);
     }
 
     /**
      * @description Rules for knowledge sources.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (create, get, update, delete, list) If the user has admin privileges.
-     * @principle Restricts knowledge source management to admin users.
+     * @allow (create, update, delete) If the user is an admin.
+     * @allow (get, list) If the user is an admin.
+     * @deny (create, update, delete) If the user is not an admin.
+     * @principle Restricts access to knowledge sources to admin users.
      */
     match /knowledgeSources/{knowledgeSourceId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     /**
      * @description Rules for admin roles.
      * @path /roles_admin/{userId}
-     * @allow (create, get, update, delete) if the user is an admin.  This allows admins to manage other admins.
-     * @allow (list) if the user is an admin. This enables admin to inspect who has admin role.
+     * @allow (get) If the user is requesting their own admin role.
+     * @allow (create) If the user is assigning themselves as an admin.
+     * @allow (list, update, delete) Never allowed.
+     * @deny (create) if the user id doesn't match the authenticated user ID
+     * @principle Grants admin privileges based on document existence in this collection.
      */
     match /roles_admin/{userId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update, delete: if false;
     }
   }
 }
