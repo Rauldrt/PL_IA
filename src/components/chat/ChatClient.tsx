@@ -26,8 +26,8 @@ interface ChatClientProps {
 
 export default function ChatClient({ userId, sessionId, setSessionId }: ChatClientProps) {
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Only for AI response loading
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true); // For suggestions and knowledge
   const [suggested, setSuggested] = useState<string[]>([]);
   const [knowledge, setKnowledge] = useState('');
   const { toast } = useToast();
@@ -71,10 +71,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
 
   const saveMessage = async (message: Omit<Message, 'id'>) => {
-    // If there is no session, we cannot save. This should be handled by handleSendMessage.
     if (!messagesCollectionRef) return;
-
-    // We get the reference to the session document to update the lastMessage field
     const sessionDocRef = doc(firestore!, 'users', userId, 'sessions', sessionId!);
     
     try {
@@ -82,7 +79,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         ...message,
         timestamp: serverTimestamp(),
       });
-       // Update last message in session
        await setDoc(sessionDocRef, { lastMessage: message.content.substring(0, 40) }, { merge: true });
 
     } catch (error: any) {
@@ -105,18 +101,16 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     if (!trimmedMessage || isLoading) return;
 
     let currentSessionId = sessionId;
+    // We are starting a new chat
     if (!currentSessionId) {
-        setIsLoading(true); // Show loading while creating session
         currentSessionId = await createNewSession();
         if (!currentSessionId) {
-            setIsLoading(false);
             return; // Stop if session creation failed
         }
     }
     
     const userMessages = messages || [];
     const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
-    // The saveMessage function now depends on a valid session, which we ensured above.
     await saveMessage(newUserMessage);
     
     setInput('');
@@ -141,61 +135,57 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   };
   
   // --- Effects ---
-  const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
-    // Only fetch suggestions if there are no messages
-    if (messages && messages.length > 0) return;
-
-    setIsLoadingSuggestions(true);
-    try {
-      const result = await getSuggestedMessages({knowledge: knowledgeContent});
-       if (result.messages) {
-        setSuggested(result.messages);
-      }
-    } catch (error) {
-      console.error('Error fetching suggested messages:', error);
-      toast({ title: 'Error', description: 'No se pudieron cargar las sugerencias.', variant: 'destructive' });
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
-  }, [messages, toast]);
-
   useEffect(() => {
-    const fetchKnowledge = async () => {
-      if (!firestore) return;
-      // We only fetch knowledge if we are starting a new chat
-      if (sessionId) return;
+    const fetchInitialData = async () => {
+      if (!firestore) {
+         setIsLoadingInitialData(false);
+         return;
+      };
 
-      setIsLoading(true);
-      const knowledgeCollection = collection(firestore, 'knowledgeSources');
-      try {
-        const knowledgeSnapshot = await getDocs(knowledgeCollection);
-        let allContent = '';
-        knowledgeSnapshot.forEach(doc => {
-          allContent += doc.data().content + '\n\n';
-        });
-        setKnowledge(allContent);
-        fetchSuggestions(allContent);
-      } catch (error: any) {
-        if (error.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: knowledgeCollection.path,
-            operation: 'list',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        } else {
-           toast({
-            title: 'Error de Conocimiento',
-            description: 'No se pudo cargar la base de conocimiento.',
-            variant: 'destructive',
-          });
-        }
-      } finally {
-        setIsLoading(false);
+      // Only fetch if it's a new chat (no sessionId)
+      if (!sessionId) {
+          setIsLoadingInitialData(true);
+          try {
+              const knowledgeCollection = collection(firestore, 'knowledgeSources');
+              const knowledgeSnapshot = await getDocs(knowledgeCollection);
+              let allContent = '';
+              knowledgeSnapshot.forEach(doc => {
+                  allContent += doc.data().content + '\n\n';
+              });
+              setKnowledge(allContent);
+              
+              // Fetch suggestions based on the knowledge
+              const result = await getSuggestedMessages({ knowledge: allContent });
+              if (result.messages) {
+                  setSuggested(result.messages);
+              }
+
+          } catch (error: any) {
+              if (error.code === 'permission-denied') {
+                  const permissionError = new FirestorePermissionError({
+                      path: collection(firestore, 'knowledgeSources').path,
+                      operation: 'list',
+                  });
+                  errorEmitter.emit('permission-error', permissionError);
+              } else {
+                  toast({
+                      title: 'Error de Conocimiento',
+                      description: 'No se pudo cargar la base de conocimiento o las sugerencias.',
+                      variant: 'destructive',
+                  });
+              }
+          } finally {
+              setIsLoadingInitialData(false);
+          }
+      } else {
+        // It's an existing chat, so no initial data to load
+        setIsLoadingInitialData(false);
+        setSuggested([]); // Clear suggestions for existing chats
       }
     };
 
-    fetchKnowledge();
-  }, [firestore, toast, fetchSuggestions, sessionId]);
+    fetchInitialData();
+  }, [firestore, sessionId, toast]);
 
 
   useEffect(() => {
@@ -205,10 +195,10 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   }, [messages, isLoading]);
 
   const hasMessages = messages && messages.length > 0;
-  // Show welcome screen if there are no messages and we aren't in a loading state.
-  const showWelcome = !hasMessages && !isLoadingMessages;
-  // Always show input unless it's the very first load for suggestions.
-  const showInput = !isLoadingSuggestions || hasMessages;
+  // Show welcome screen if this is a new chat, there are no messages, and initial data is loaded
+  const showWelcome = !sessionId && !hasMessages && !isLoadingInitialData;
+  const showInput = !isLoadingInitialData;
+
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -216,19 +206,19 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-               {isLoadingMessages && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
+               {(isLoadingMessages || (isLoadingInitialData && !sessionId)) && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
 
               {showWelcome && (
                 <WelcomeScreen
                   suggestedMessages={suggested}
                   onSuggestionClick={handleSendMessage}
-                  isLoading={isLoadingSuggestions || isLoading}
+                  isLoading={false} // Loading is handled by the main loader now
                 />
               )}
               
               {hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
 
-              {isLoading && hasMessages && (
+              {isLoading && ( // This is for AI "thinking" animation
                 <div className="flex items-start gap-4 py-4 justify-start">
                   <Avatar className="h-8 w-8 border">
                     {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
@@ -248,7 +238,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
           <ChatInputForm
             input={input}
             setInput={setInput}
-            isLoading={isLoading}
+            isLoading={isLoading} // The input is disabled only when AI is responding
             handleSendMessage={handleSendMessage}
           />
       )}
