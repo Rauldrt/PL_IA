@@ -4,13 +4,14 @@ import React, { DependencyList, createContext, useContext, ReactNode, useMemo, u
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
-import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
+import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 
 interface FirebaseProviderProps {
   children: ReactNode;
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
+  initiateEmailSignIn: (auth: Auth, email: string, password: string) => void;
 }
 
 // Internal state for user authentication
@@ -30,6 +31,7 @@ export interface FirebaseContextState {
   user: User | null;
   isUserLoading: boolean; // True during initial auth check
   userError: Error | null; // Error from auth listener
+  initiateEmailSignIn: (auth: Auth, email: string, password: string) => void;
 }
 
 // Return type for useFirebase()
@@ -40,6 +42,7 @@ export interface FirebaseServicesAndUser {
   user: User | null;
   isUserLoading: boolean;
   userError: Error | null;
+  initiateEmailSignIn: (auth: Auth, email: string, password: string) => void;
 }
 
 // Return type for useUser() - specific to user auth state
@@ -60,6 +63,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   firebaseApp,
   firestore,
   auth,
+  initiateEmailSignIn,
 }) => {
   const [userAuthState, setUserAuthState] = useState<UserAuthState>({
     user: null,
@@ -100,8 +104,9 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       user: userAuthState.user,
       isUserLoading: userAuthState.isUserLoading,
       userError: userAuthState.userError,
+      initiateEmailSignIn
     };
-  }, [firebaseApp, firestore, auth, userAuthState]);
+  }, [firebaseApp, firestore, auth, userAuthState, initiateEmailSignIn]);
 
   return (
     <FirebaseContext.Provider value={contextValue}>
@@ -133,6 +138,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     user: context.user,
     isUserLoading: context.isUserLoading,
     userError: context.userError,
+    initiateEmailSignIn: context.initiateEmailSignIn,
   };
 };
 

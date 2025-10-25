@@ -1,5 +1,5 @@
 import { Logo } from '@/components/icons';
-import LoginButton from '@/components/auth/LoginButton';
+import LoginForm from '@/components/auth/LoginForm';
 
 export default function LoginPage() {
   return (
@@ -11,10 +11,10 @@ export default function LoginPage() {
             Bienvenido a Conecta IA
           </h1>
           <p className="mt-4 text-base text-muted-foreground">
-            Presiona el botón para conversar con tu agente de IA personalizado.
+            Inicia sesión o crea una cuenta para conversar con tu agente de IA.
           </p>
         </div>
-        <LoginButton />
+        <LoginForm />
       </div>
     </main>
   );

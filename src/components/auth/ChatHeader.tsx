@@ -12,12 +12,8 @@ export default function ChatHeader() {
   const auth = useAuth();
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.replace('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+    await signOut(auth);
+    router.replace('/');
   };
 
   return (
