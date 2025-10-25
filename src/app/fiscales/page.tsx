@@ -5,7 +5,7 @@ import AuthChatHeader from '@/components/auth/ChatHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { MessageCircle, UserPlus, Trash2, LoaderCircle, MessageSquare } from 'lucide-react';
+import { MessageCircle, UserPlus, Trash2, LoaderCircle } from 'lucide-react';
 import AdminGuard from '@/components/auth/AdminGuard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -213,3 +213,5 @@ export default function FiscalesPage() {
         </AdminGuard>
     );
 }
+
+    
