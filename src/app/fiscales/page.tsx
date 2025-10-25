@@ -6,13 +6,15 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MessageCircle, UserPlus, Trash2, LoaderCircle } from 'lucide-react';
-import AdminGuard from '@/components/auth/AdminGuard';
+import AuthGuard from '@/components/auth/AuthGuard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, doc, deleteDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useIsAdmin } from '@/hooks/use-is-admin';
+
 
 interface Fiscal {
     id?: string;
@@ -45,6 +47,8 @@ const WhatsAppIcon = (props: React.SVGProps<SVGSVGElement>) => (
 function FiscalesPageContent() {
     const { toast } = useToast();
     const firestore = useFirestore();
+    const { user } = useUser();
+    const { isAdmin, isLoading: isAdminLoading } = useIsAdmin(user?.uid);
 
     const fiscalesCollectionRef = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -123,12 +127,14 @@ function FiscalesPageContent() {
                                     </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                     <Link href="/fiscales/cargar" passHref>
-                                        <Button>
-                                            <UserPlus className="mr-2 h-4 w-4" />
-                                            Cargar Nuevos Fiscales
-                                        </Button>
-                                    </Link>
+                                     { !isAdminLoading && isAdmin && (
+                                         <Link href="/fiscales/cargar" passHref>
+                                            <Button>
+                                                <UserPlus className="mr-2 h-4 w-4" />
+                                                Cargar Nuevos Fiscales
+                                            </Button>
+                                        </Link>
+                                     )}
                                     <Link href="/chat" passHref>
                                         <Button variant="outline">
                                             <MessageCircle className="mr-2 h-4 w-4" />
@@ -142,7 +148,7 @@ function FiscalesPageContent() {
 
                     <div className="space-y-6">
                         <div className="space-y-4 max-h-[calc(100vh-250px)] overflow-auto pr-2">
-                        {isLoadingFiscales ? (
+                        {isLoadingFiscales || isAdminLoading ? (
                             <div className="flex justify-center items-center pt-10">
                                 <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
                             </div>
@@ -167,7 +173,7 @@ function FiscalesPageContent() {
                                                     <TableHead>Mesa</TableHead>
                                                     <TableHead>Rol</TableHead>
                                                     <TableHead>Contacto</TableHead>
-                                                    <TableHead>Acción</TableHead>
+                                                    {isAdmin && <TableHead>Acción</TableHead>}
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -184,11 +190,13 @@ function FiscalesPageContent() {
                                                                 </a>
                                                             </Button>
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
-                                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                                            </Button>
-                                                        </TableCell>
+                                                        {isAdmin && (
+                                                            <TableCell>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
+                                                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                                                </Button>
+                                                            </TableCell>
+                                                        )}
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
@@ -208,10 +216,8 @@ function FiscalesPageContent() {
 
 export default function FiscalesPage() {
     return (
-        <AdminGuard>
+        <AuthGuard>
             <FiscalesPageContent />
-        </AdminGuard>
+        </AuthGuard>
     );
 }
-
-    
