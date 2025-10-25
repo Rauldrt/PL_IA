@@ -11,10 +11,9 @@ import MessageBubble from './MessageBubble';
 import ChatInputForm from './ChatInputForm';
 import { WelcomeScreen } from './WelcomeScreen';
 import { LoaderCircle } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, doc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -28,6 +27,13 @@ export default function ChatClient() {
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const firestore = useFirestore();
+
+  const configRef = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return doc(firestore, 'config', 'app-settings');
+  }, [firestore]);
+
+  const { data: appConfig } = useDoc<{ aiAvatarUrl: string }>(configRef);
 
   const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
     if (messages.length > 0) return;
@@ -82,7 +88,7 @@ export default function ChatClient() {
 
     fetchKnowledge();
   }, [firestore, toast, fetchSuggestions]);
-  
+
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -108,7 +114,7 @@ export default function ChatClient() {
 
       const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: aiResponse.response };
       setMessages((prev) => [...prev, newAiMessage]);
-    } catch (e)  {
+    } catch (e) {
       console.error('Chat error:', e);
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
       setMessages((prev) => prev.slice(0, -1)); // Remove user message on error
@@ -117,7 +123,7 @@ export default function ChatClient() {
     }
   };
 
-  const aiAvatar = PlaceHolderImages.find((p) => p.id === 'ai-avatar');
+  const aiAvatarUrl = appConfig?.aiAvatarUrl;
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -127,18 +133,18 @@ export default function ChatClient() {
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
               {messages.length === 0 ? (
-                <WelcomeScreen 
-                  suggestedMessages={suggested} 
+                <WelcomeScreen
+                  suggestedMessages={suggested}
                   onSuggestionClick={handleSendMessage}
                   isLoading={isLoadingSuggestions || isLoading}
                 />
               ) : (
-                messages.map((m) => <MessageBubble key={m.id} message={m} />)
+                messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)
               )}
               {isLoading && messages.length > 0 && (
                 <div className="flex items-start gap-4 py-4 justify-start">
                   <Avatar className="h-8 w-8 border">
-                    {aiAvatar && <AvatarImage src={aiAvatar.imageUrl} alt="AI Avatar" data-ai-hint={aiAvatar.imageHint} />}
+                    {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
                     <AvatarFallback>IA</AvatarFallback>
                   </Avatar>
                   <div className="flex items-center space-x-2 rounded-lg bg-card px-4 py-3 text-sm shadow-sm">
@@ -160,3 +166,5 @@ export default function ChatClient() {
     </div>
   );
 }
+
+    

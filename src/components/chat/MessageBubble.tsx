@@ -1,11 +1,14 @@
 import { User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import type { Message } from '@/lib/types';
 
-export default function MessageBubble({ message }: { message: Message }) {
-  const aiAvatar = PlaceHolderImages.find((p) => p.id === 'ai-avatar');
+interface MessageBubbleProps {
+    message: Message;
+    aiAvatarUrl?: string | null;
+}
+
+export default function MessageBubble({ message, aiAvatarUrl }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -17,7 +20,7 @@ export default function MessageBubble({ message }: { message: Message }) {
     >
       {!isUser && (
         <Avatar className="h-8 w-8 border">
-          {aiAvatar && <AvatarImage src={aiAvatar.imageUrl} alt="AI Avatar" data-ai-hint={aiAvatar.imageHint} />}
+          {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
           <AvatarFallback>IA</AvatarFallback>
         </Avatar>
       )}
@@ -41,3 +44,5 @@ export default function MessageBubble({ message }: { message: Message }) {
     </div>
   );
 }
+
+    
