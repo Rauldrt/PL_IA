@@ -1,62 +1,37 @@
 /**
- * @fileoverview Firestore Security Rules for Conecta IA.
- *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for user-specific data
- * (profiles, sessions, messages) and allows public read access to knowledge sources,
- * while restricting modifications to authenticated users.  Administrative privileges
- * are managed through a separate collection, granting elevated permissions to designated admins.
+ * @file Firestore Security Rules
+ * @description This ruleset enforces a strict user-ownership model for user-related data and allows public read access to knowledge sources while restricting their modification to authenticated users.  The rules also manage access to admin roles and polling supervisors (fiscales).
  *
  * Data Structure:
- * - /users/{userId}: User profiles, accessible only by the user themselves.
- * - /users/{userId}/sessions/{sessionId}: User sessions, accessible only by the user.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session, accessible only by the user.
- * - /knowledgeSources/{knowledgeSourceId}: Knowledge sources, publicly readable, writable by any authenticated user.
- * - /roles_admin/{userId}: Admin roles, readable by the assigned user.
+ * - /users/{userId}: Stores user profiles, accessible only by the user themselves.
+ * - /users/{userId}/sessions/{sessionId}: Stores user sessions, accessible only by the user themselves.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within a session, accessible only by the user themselves.
+ * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources, publicly readable but writable only by authenticated users.
+ * - /roles_admin/{userId}: Stores admin roles for users, readable by the assigned user.
+ * - /fiscales/{fiscalId}: Stores information about polling supervisors (fiscales). Write access is open to authenticated users.
  *
  * Key Security Decisions:
- * - User data is strictly controlled via ownership checks.
- * - Knowledge sources are publicly readable but require authentication for modifications.
- * - Admin roles are stored separately and are only readable by the user to whom the role is assigned.
+ * - User data is strictly controlled by the user's ID in the path.
+ * - Knowledge sources are publicly readable to enable broad access.
+ * - Admin roles are readable only by the user to whom the role is assigned.
+ * - Fiscales data is accessible by authenticated users.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Checks if the request is authenticated.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the requested user ID matches the authenticated user ID.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    /**
-     * @description Checks if the user is an existing owner of the document.
-     * @principle Ensures document existence before modification.
-     */
-    function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * @description Stores user profiles. Accessible only by the user themselves.
+     * @description Protects user profiles, allowing only the user to read and write their own data.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user123' can create their profile.
-     * @allow (get) - User with UID 'user123' can read their profile.
-     * @allow (update) - User with UID 'user123' can update their profile.
-     * @allow (delete) - User with UID 'user123' can delete their profile.
-     * @deny (create) - User with UID 'user456' cannot create a profile for user 'user123'.
-     * @deny (get) - User with UID 'user456' cannot read the profile of user 'user123'.
-     * @deny (update) - User with UID 'user456' cannot update the profile of user 'user123'.
-     * @deny (delete) - User with UID 'user456' cannot delete the profile of user 'user123'.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create their own profile.
+     * @deny (create) User with ID 'user123' cannot create a profile for 'otherUser'.
+     * @allow (get) User with ID 'user123' can read their own profile.
+     * @deny (get) User with ID 'user123' cannot read the profile of 'otherUser'.
+     * @allow (update) User with ID 'user123' can update their own profile.
+     * @deny (update) User with ID 'user123' cannot update the profile of 'otherUser'.
+     * @allow (delete) User with ID 'user123' can delete their own profile.
+     * @deny (delete) User with ID 'user123' cannot delete the profile of 'otherUser'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -67,17 +42,17 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores user sessions. Accessible only by the user themselves.
+     * @description Protects user sessions, allowing only the user to read and write their own session data.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) - User with UID 'user123' can create a session under their profile.
-     * @allow (get) - User with UID 'user123' can read a session under their profile.
-     * @allow (update) - User with UID 'user123' can update a session under their profile.
-     * @allow (delete) - User with UID 'user123' can delete a session under their profile.
-     * @deny (create) - User with UID 'user456' cannot create a session under user 'user123'.
-     * @deny (get) - User with UID 'user456' cannot read a session under user 'user123'.
-     * @deny (update) - User with UID 'user456' cannot update a session under user 'user123'.
-     * @deny (delete) - User with UID 'user456' cannot delete a session under user 'user123'.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create a session under their profile.
+     * @deny (create) User with ID 'user123' cannot create a session under 'otherUser's profile.
+     * @allow (get) User with ID 'user123' can read a session under their profile.
+     * @deny (get) User with ID 'user123' cannot read a session under 'otherUser's profile.
+     * @allow (update) User with ID 'user123' can update a session under their profile.
+     * @deny (update) User with ID 'user123' cannot update a session under 'otherUser's profile.
+     * @allow (delete) User with ID 'user123' can delete a session under their profile.
+     * @deny (delete) User with ID 'user123' cannot delete a session under 'otherUser's profile.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/sessions/{sessionId} {
       allow get: if isOwner(userId);
@@ -88,17 +63,17 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores messages within a session. Accessible only by the user themselves.
+     * @description Protects messages within user sessions, allowing only the user to read and write messages within their own sessions.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) - User with UID 'user123' can create a message within their session.
-     * @allow (get) - User with UID 'user123' can read a message within their session.
-     * @allow (update) - User with UID 'user123' can update a message within their session.
-     * @allow (delete) - User with UID 'user123' can delete a message within their session.
-     * @deny (create) - User with UID 'user456' cannot create a message within user 'user123's session.
-     * @deny (get) - User with UID 'user456' cannot read a message within user 'user123's session.
-     * @deny (update) - User with UID 'user456' cannot update a message within user 'user123's session.
-     * @deny (delete) - User with UID 'user456' cannot delete a message within user 'user123's session.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create a message within their session.
+     * @deny (create) User with ID 'user123' cannot create a message within 'otherUser's session.
+     * @allow (get) User with ID 'user123' can read a message within their session.
+     * @deny (get) User with ID 'user123' cannot read a message within 'otherUser's session.
+     * @allow (update) User with ID 'user123' can update a message within their session.
+     * @deny (update) User with ID 'user123' cannot update a message within 'otherUser's session.
+     * @allow (delete) User with ID 'user123' can delete a message within their session.
+     * @deny (delete) User with ID 'user123' cannot delete a message within 'otherUser's session.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
       allow get: if isOwner(userId);
@@ -109,14 +84,17 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores knowledge sources added to the Gemini AI. Accessible by any authenticated user.
+     * @description Allows any authenticated user to read knowledge sources, but restricts creation, updates, and deletion to authenticated users.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (get) - Any user can read knowledge sources.
-     * @allow (list) - Any user can list knowledge sources.
-     * @allow (create) - Any authenticated user can create a knowledge source.
-     * @allow (update) - Any authenticated user can update a knowledge source.
-     * @allow (delete) - Any authenticated user can delete a knowledge source.
-     * @principle Allows public read access and authenticated write access.
+     * @allow (get) Any user can read a knowledge source.
+     * @allow (list) Any user can list knowledge sources.
+     * @allow (create) An authenticated user can create a knowledge source.
+     * @deny (create) An unauthenticated user cannot create a knowledge source.
+     * @allow (update) An authenticated user can update a knowledge source.
+     * @deny (update) An unauthenticated user cannot update a knowledge source.
+     * @allow (delete) An authenticated user can delete a knowledge source.
+     * @deny (delete) An unauthenticated user cannot delete a knowledge source.
+     * @principle Allows public read access with authenticated write access.
      */
     match /knowledgeSources/{knowledgeSourceId} {
       allow get: if true;
@@ -127,14 +105,11 @@ service cloud.firestore {
     }
 
     /**
-     * @description Stores admin roles for users. Only accessible for reads by the assigned user.
+     * @description Protects admin roles, allowing only the assigned user to read their own role.
      * @path /roles_admin/{userId}
-     * @allow (get) - User with UID 'user123' can read their admin role.
-     * @deny (create) - Creating admin roles is not allowed via client-side rules.
-     * @deny (update) - Updating admin roles is not allowed via client-side rules.
-     * @deny (delete) - Deleting admin roles is not allowed via client-side rules.
-     * @deny (list) - Listing admin roles is not allowed.
-     * @principle Restricts access to admin role documents to the assigned user for reads, and disables writes.
+     * @allow (get) User with ID 'user123' can read their own admin role.
+     * @deny (get) User with ID 'user123' cannot read the admin role of 'otherUser'.
+     * @principle Enforces document ownership for reads.
      */
     match /roles_admin/{userId} {
       allow get: if isOwner(userId);
@@ -144,23 +119,34 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-   /**
-    * @description Public Config data.  Accessible for reads by any user.
-    * @path /config/app-settings
-    * @allow (get) - Any user can read app settings.
-    * @deny (create) - No one can create a config.
-    * @deny (update) - No one can update a config.
-    * @deny (delete) - No one can delete a config.
-    * @deny (list) - No one can list configs.
-    * @principle Allows public read access, disables writes.
-    */
-   match /config/app-settings {
-      allow get: if true;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+    /**
+     * @description Allows authenticated users to manage information about polling supervisors (fiscales).
+     * @path /fiscales/{fiscalId}
+     * @allow (get) Any authenticated user can read a fiscal.
+     * @allow (list) Any authenticated user can list fiscales.
+     * @allow (create) Any authenticated user can create a fiscal.
+     * @allow (update) Any authenticated user can update a fiscal.
+     * @allow (delete) Any authenticated user can delete a fiscal.
+     * @principle Allows authenticated access to manage fiscales.
+     */
+    match /fiscales/{fiscalId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
+  }
 
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return request.auth.uid == userId;
+  }
+
+  function isExistingOwner(userId) {
+    return isOwner(userId) && resource != null;
   }
 }
