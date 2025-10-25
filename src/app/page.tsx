@@ -9,7 +9,7 @@ export default function LoginPage() {
           <div className="relative inline-block">
             <div className="animated-gradient-bg absolute -inset-2 rounded-2xl bg-gradient-to-r from-red-500 via-green-500 via-blue-500 to-yellow-500 opacity-75 blur-lg"></div>
             <div className="relative rounded-lg bg-card p-6 shadow-lg">
-                <Logo className="h-20 w-auto text-primary" />
+                <Logo className="text-primary" width={128} height={128} />
             </div>
           </div>
           <h1 className="mt-8 font-headline text-4xl font-bold tracking-tight text-foreground sm:text-5xl">

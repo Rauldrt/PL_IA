@@ -15,22 +15,25 @@ const DefaultLogo = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
   );
 
-export const Logo = (props: React.SVGProps<SVGSVGElement> & { className?: string }) => {
+export const Logo = (props: React.SVGProps<SVGSVGElement> & { className?: string; width?: number; height?: number }) => {
     const appLogo = PlaceHolderImages.find(p => p.id === 'app-logo');
     const logoUrl = appLogo?.imageUrl;
 
+    const width = props.width || 48;
+    const height = props.height || 48;
+
     if (logoUrl) {
         return (
-            <div className={props.className} style={{ width: props.width, height: props.height }}>
+            <div className={props.className}>
                 <Image
                     src={logoUrl}
                     alt="App Logo"
-                    width={Number(props.width) || 48}
-                    height={Number(props.height) || 48}
+                    width={Number(width)}
+                    height={Number(height)}
                     className="object-contain"
                 />
             </div>
         );
     }
-    return <DefaultLogo {...props} />;
+    return <DefaultLogo {...props} width={width} height={height} />;
 };
