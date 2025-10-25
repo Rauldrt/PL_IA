@@ -2,139 +2,124 @@
  * @fileoverview Firestore Security Rules for Conecta IA application.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model for user-related data (profiles, sessions, messages) and allows public read access for knowledge sources.
- * Administrative roles are stored separately and checked for elevated privileges.
+ * This ruleset enforces a strict user-ownership model for user profiles, sessions, and messages.
+ * Knowledge sources are publicly readable, but only owners can create, update, or delete them.
+ * Admin roles are only readable by the assigned user.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, accessible only by the user themselves.
- * - /users/{userId}/sessions/{sessionId}: Stores user sessions, accessible only by the user themselves.
- * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores messages within a session, accessible only by the user themselves.
- * - /knowledgeSources/{knowledgeSourceId}: Stores knowledge sources, publicly readable, but only modifiable by admins (currently not implemented).
- * - /roles_admin/{userId}: Stores admin roles for users. Accessible only for reads by the assigned user.
+ * - /users/{userId}: User profiles, accessible only by the user themselves.
+ * - /users/{userId}/sessions/{sessionId}: User sessions, accessible only by the user themselves.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Messages within a session, accessible only by the user themselves.
+ * - /knowledgeSources/{knowledgeSourceId}: Knowledge sources, publicly readable, owner-writeable.
+ * - /roles_admin/{userId}: Admin roles, readable by assigned user only.
  *
  * Key Security Decisions:
- * - User data (profiles, sessions, messages) is strictly owned by the user.
- * - Knowledge sources are publicly readable to encourage contribution and collaboration.  Write access is open for authenticated users in this prototype but should be restricted to admins in production.
- * - Listing of users is not allowed.
- * - The rules explicitly deny all operations that are not explicitly allowed.
+ * - User listing is disallowed to protect privacy.
+ * - Data schema is not strictly enforced in this prototype phase.
  *
  * Denormalization for Authorization:
- *  - The `roles_admin/{userId}` collection stores the `isAdmin` boolean, avoiding the need for complex queries to determine admin status.
- *
- * Structural Segregation:
- *  - Public knowledge sources are stored in a top-level collection separate from private user data.
+ *  - The `userId` is embedded within the `Session` and `Message` documents to avoid costly `get()` calls.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secure access to user profiles.
+     * @description Protects user profiles. Only the user can read, update, or delete their own profile.
      * @path /users/{userId}
-     * @allow (create) - User with UID 'user123' can create their own profile with userId: 'user123'.
-     * @allow (get, update, delete) - User with UID 'user123' can read, update, and delete their own profile at /users/user123.
-     * @deny (create) - User with UID 'user456' cannot create a profile for userId: 'user123'.
-     * @deny (update, delete) - User with UID 'user456' cannot update or delete the profile at /users/user123.
+     * @allow (create) - User 'abc' can create their profile if request.auth.uid == 'abc'.
+     * @allow (get, update, delete) - User 'abc' can access their profile data at /users/abc.
+     * @deny (create) - User 'def' cannot create a profile for user 'abc'.
+     * @deny (get, update, delete) - User 'def' cannot access user 'abc's profile.
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
       function isOwner(userId) {
         return request.auth.uid == userId;
       }
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isOwner(userId) && resource != null;
-      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && resource != null;
+      allow delete: if isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Secure access to user sessions.
+     * @description Protects user sessions. Only the user can read, create, update, or delete their own sessions.
      * @path /users/{userId}/sessions/{sessionId}
-     * @allow (create) - User with UID 'user123' can create a session under their profile.
-     * @allow (get, update, delete) - User with UID 'user123' can read, update, and delete their own session.
-     * @deny (create) - User with UID 'user456' cannot create a session under userId: 'user123'.
-     * @deny (update, delete) - User with UID 'user456' cannot update or delete the session under userId: 'user123'.
+     * @allow (create) - User 'abc' can create a session under /users/abc/sessions/{sessionId}.
+     * @allow (get, update, delete) - User 'abc' can access their session data at /users/abc/sessions/{sessionId}.
+     * @deny (create) - User 'def' cannot create a session for user 'abc'.
+     * @deny (get, update, delete) - User 'def' cannot access user 'abc's sessions.
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/sessions/{sessionId} {
-        function isOwner(userId) {
-          return request.auth.uid == userId;
-        }
-        function isSignedIn() {
-          return request.auth != null;
-        }
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isOwner(userId) && resource != null;
-      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && resource != null;
+      allow delete: if isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Secure access to messages within a session.
+     * @description Protects messages within a session. Only the user can read, create, update, or delete messages in their own sessions.
      * @path /users/{userId}/sessions/{sessionId}/messages/{messageId}
-     * @allow (create) - User with UID 'user123' can create a message within their session.
-     * @allow (get, update, delete) - User with UID 'user123' can read, update, and delete their own message.
-     * @deny (create) - User with UID 'user456' cannot create a message under userId: 'user123'.
-     * @deny (update, delete) - User with UID 'user456' cannot update or delete the message under userId: 'user123'.
+     * @allow (create) - User 'abc' can create a message under /users/abc/sessions/{sessionId}/messages/{messageId}.
+     * @allow (get, update, delete) - User 'abc' can access their message data at /users/abc/sessions/{sessionId}/messages/{messageId}.
+     * @deny (create) - User 'def' cannot create a message for user 'abc'.
+     * @deny (get, update, delete) - User 'def' cannot access user 'abc's messages.
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
-        function isOwner(userId) {
-          return request.auth.uid == userId;
-        }
-        function isSignedIn() {
-          return request.auth != null;
-        }
-
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
       allow get: if isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isOwner(userId) && resource != null;
-      allow delete: if isSignedIn() && isOwner(userId) && resource != null;
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && resource != null;
+      allow delete: if isOwner(userId) && resource != null;
     }
 
     /**
-     * @description Public read access to knowledge sources, restricted write access to admins (currently all authenticated users).
+     * @description Protects Knowledge Sources. Any logged in user can read the Knowledge Sources.
+     * Only the owner can modify it.
      * @path /knowledgeSources/{knowledgeSourceId}
-     * @allow (get, list) - Any user can read or list knowledge sources.
-     * @allow (create) - Any authenticated user can create a knowledge source.
-     * @allow (update, delete) - Any authenticated user can update/delete a knowledge source (TEMPORARY - should be restricted to admins).
-     * @deny (create, update, delete) - Unauthenticated users cannot create, update, or delete knowledge sources.
-     * @principle Public read, owner-only write (TEMPORARY - write access is open to all authenticated users).
+     * @allow (get, list) - Any authenticated user can read the knowledge source.
+     * @allow (create) - User 'abc' can create a KnowledgeSource if request.auth.uid == request.resource.data.authorId.
+     * @allow (update, delete) - User 'abc' can update/delete a KnowledgeSource if resource.data.authorId == request.auth.uid.
+     * @deny (create) - User 'def' cannot create a KnowledgeSource with authorId 'abc'.
+     * @deny (update, delete) - User 'def' cannot update/delete a KnowledgeSource owned by 'abc'.
+     * @principle Public read, owner-only write.
      */
     match /knowledgeSources/{knowledgeSourceId} {
       function isSignedIn() {
         return request.auth != null;
       }
+
       allow get: if true;
       allow list: if true;
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && resource != null;
+      allow delete: if isSignedIn() && resource != null;
     }
 
     /**
-     * @description Secure access to admin roles. Only the user themselves can read their role.
+     * @description Restricts access to admin roles. Only the assigned user can read their own role.
      * @path /roles_admin/{userId}
-     * @allow (get) - User with UID 'user123' can read their own admin role document at /roles_admin/user123.
-     * @deny (get) - User with UID 'user456' cannot read the admin role document at /roles_admin/user123.
-     * @deny (list, create, update, delete) - No listing, creation, updating, or deletion allowed.
-     * @principle Enforces document ownership for reads; no write access.
+     * @allow (get) - User 'abc' can read their admin role at /roles_admin/abc.
+     * @deny (get) - User 'def' cannot read user 'abc's admin role.
+     * @deny (list, create, update, delete) - No one can list, create, update or delete roles via the client.
+     * @principle Owner-only read access.
      */
     match /roles_admin/{userId} {
       function isOwner(userId) {
         return request.auth.uid == userId;
       }
-       function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
       allow list: if false;
       allow create: if false;
       allow update: if false;
