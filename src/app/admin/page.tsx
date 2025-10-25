@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, FileUp, FileText } from 'lucide-react';
+import { LoaderCircle, FileUp, FileText, MessageCircle } from 'lucide-react';
 import AuthChatHeader from '@/components/auth/ChatHeader';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -155,10 +156,20 @@ function AdminPageContent() {
         <div className="mx-auto max-w-2xl">
           <Card>
             <CardHeader>
-              <CardTitle>Panel de Administración</CardTitle>
-              <CardDescription>
-                Agrega nuevas fuentes de conocimiento para entrenar a tu agente de IA. Puedes pegar texto, subir un PDF o proporcionar una URL.
-              </CardDescription>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <CardTitle>Panel de Administración</CardTitle>
+                  <CardDescription className="mt-1">
+                    Agrega nuevas fuentes de conocimiento para entrenar a tu agente de IA. Puedes pegar texto, subir un PDF o proporcionar una URL.
+                  </CardDescription>
+                </div>
+                <Link href="/chat" passHref>
+                  <Button variant="outline">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Volver al Chat
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
