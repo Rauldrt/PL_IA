@@ -2,24 +2,55 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getSuggestedMessages, sendMessage } from '@/lib/actions';
+import { getSuggestedMessages } from '@/lib/actions';
+import { chat } from '@/ai/flows/chat';
 import type { Message } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import ChatHeader from './ChatHeader';
+import AuthChatHeader from '@/components/auth/ChatHeader';
 import MessageBubble from './MessageBubble';
 import ChatInputForm from './ChatInputForm';
 import { WelcomeScreen } from './WelcomeScreen';
 import { LoaderCircle } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggested, setSuggested] = useState<string[]>([]);
+  const [knowledge, setKnowledge] = useState('');
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  useEffect(() => {
+    const fetchKnowledge = async () => {
+      if (!firestore) return;
+      try {
+        const knowledgeCollection = collection(firestore, 'knowledgeSources');
+        const knowledgeSnapshot = await getDocs(knowledgeCollection);
+        let allContent = '';
+        knowledgeSnapshot.forEach(doc => {
+          allContent += doc.data().content + '\n\n';
+        });
+        setKnowledge(allContent);
+      } catch (error) {
+        console.error('Error fetching knowledge base:', error);
+        toast({
+          title: 'Error de Conocimiento',
+          description: 'No se pudo cargar la base de conocimiento.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    fetchKnowledge();
+  }, [firestore, toast]);
+  
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -57,14 +88,14 @@ export default function ChatClient() {
     setInput('');
 
     try {
-      const result = await sendMessage(messages, trimmedMessage);
-      if (result.error) {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
-        setMessages((prev) => prev.slice(0, -1));
-      } else if (result.response) {
-        const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: result.response };
-        setMessages((prev) => [...prev, newAiMessage]);
-      }
+      const aiResponse = await chat({
+        history: messages,
+        message: trimmedMessage,
+        knowledge: knowledge,
+      });
+
+      const newAiMessage: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: aiResponse.response };
+      setMessages((prev) => [...prev, newAiMessage]);
     } catch (e) {
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
       setMessages((prev) => prev.slice(0, -1));
@@ -77,7 +108,7 @@ export default function ChatClient() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <ChatHeader />
+      <AuthChatHeader />
       <main className="flex-1 overflow-hidden">
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
