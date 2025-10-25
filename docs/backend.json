@@ -113,7 +113,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "AdminRole",
       "type": "object",
-      "description": "A document in the 'roles_admin' collection indicates that the user has admin privileges. The document itself can be empty or contain relevant metadata.",
+      "description": "The existence of a document in the 'roles_admin/{userId}' collection indicates that the user has admin privileges. The document itself can be empty or contain relevant metadata.",
       "properties": {
         "isAdmin": {
           "type": "boolean",
