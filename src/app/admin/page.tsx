@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import PDFExtract from 'pdf-extract';
+import * as pdfjsLib from 'pdfjs-dist';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle, FileUp, FileText } from 'lucide-react';
 import ChatHeader from '@/components/chat/ChatHeader';
+
+// Configure the worker for pdfjs-dist
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+}
 
 export default function AdminPage() {
   const [name, setName] = useState('');
@@ -40,44 +45,36 @@ export default function AdminPage() {
     setIsParsing(true);
     toast({ title: 'Procesando PDF', description: 'Extrayendo texto del archivo...' });
 
-    const pdfExtract = new PDFExtract();
     const reader = new FileReader();
 
     reader.onload = async (event) => {
       try {
         const data = event.target?.result;
         if (data) {
-          pdfExtract.extract(data as ArrayBuffer, {}, (err, extracted) => {
-            if (err) {
-                console.error('Error parsing PDF:', err);
-                toast({
-                  title: 'Error al procesar PDF',
-                  description: 'No se pudo extraer el texto del archivo.',
-                  variant: 'destructive',
-                });
-                setFileName('');
-                setIsParsing(false);
-                return;
-            }
-             if (extracted) {
-              const textContent = extracted.pages.map((page) => page.content.map((item) => item.str).join(' ')).join('\n\n');
-              setContent(textContent);
-              toast({
-                title: 'Éxito',
-                description: 'El contenido del PDF ha sido extraído y cargado en el campo de texto.',
-              });
-            }
-            setIsParsing(false);
+          const loadingTask = pdfjsLib.getDocument(new Uint8Array(data as ArrayBuffer));
+          const pdf = await loadingTask.promise;
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => ('str' in item ? item.str : '')).join(' ');
+            fullText += pageText + '\n\n';
+          }
+          setContent(fullText);
+          toast({
+            title: 'Éxito',
+            description: 'El contenido del PDF ha sido extraído y cargado en el campo de texto.',
           });
         }
       } catch (error) {
-        console.error('Error reading PDF file:', error);
+        console.error('Error parsing PDF:', error);
         toast({
-          title: 'Error al leer archivo',
-          description: 'No se pudo leer el archivo PDF.',
+          title: 'Error al procesar PDF',
+          description: 'No se pudo extraer el texto del archivo.',
           variant: 'destructive',
         });
         setFileName('');
+      } finally {
         setIsParsing(false);
       }
     };
@@ -97,6 +94,7 @@ export default function AdminPage() {
     setIsLoading(true);
 
     try {
+      if (!firestore) throw new Error('Firestore is not initialized');
       const knowledgeCollection = collection(firestore, 'knowledgeSources');
       await addDoc(knowledgeCollection, {
         name,
