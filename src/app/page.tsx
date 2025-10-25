@@ -1,3 +1,5 @@
+'use client';
+
 import LoginForm from '@/components/auth/LoginForm';
 import { Logo } from '@/components/icons';
 
@@ -8,7 +10,7 @@ export default function LoginPage() {
         <div className="text-center">
           <div className="relative inline-block">
             <div className="animated-gradient-bg absolute -inset-2 rounded-2xl bg-gradient-to-r from-red-500 via-green-500 via-blue-500 to-yellow-500 opacity-75 blur-lg"></div>
-            <div className="relative rounded-lg bg-card p-6 shadow-lg">
+            <div className="relative flex items-center justify-center rounded-lg bg-card p-6 shadow-lg">
                 <Logo className="text-primary" width={128} height={128} />
             </div>
           </div>
