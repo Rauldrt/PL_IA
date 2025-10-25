@@ -202,6 +202,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   const hasMessages = messages && messages.length > 0;
   const isChatReady = !isLoadingMessages && sessionId;
   const showWelcome = !isLoadingMessages && !hasMessages;
+  const showInput = !isLoadingMessages;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -209,7 +210,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-               {isLoadingMessages && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
+               {isLoadingMessages && !showWelcome && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
 
               {showWelcome && (
                 <WelcomeScreen
@@ -239,12 +240,14 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
           </ScrollArea>
         </div>
       </main>
-      <ChatInputForm
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        handleSendMessage={handleSendMessage}
-      />
+      {showInput && (
+          <ChatInputForm
+            input={input}
+            setInput={setInput}
+            isLoading={isLoading}
+            handleSendMessage={handleSendMessage}
+          />
+      )}
     </div>
   );
 }
