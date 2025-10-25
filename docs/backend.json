@@ -126,6 +126,42 @@
         }
       },
       "required": ["isAdmin", "assignedAt"]
+    },
+     "Fiscal": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Fiscal",
+      "type": "object",
+      "description": "Represents a polling supervisor for elections.",
+      "properties": {
+        "apellidoYNombre": {
+          "type": "string",
+          "description": "Full name of the person."
+        },
+        "dni": {
+          "type": "string",
+          "description": "National Identity Document number."
+        },
+        "esFiscal": {
+          "type": "boolean",
+          "description": "Whether the person is a designated fiscal."
+        },
+        "escuela": {
+          "type": "string",
+          "description": "The assigned school for monitoring."
+        },
+        "mesa": {
+          "type": "string",
+          "description": "The assigned voting table number."
+        },
+        "telefono": {
+          "type": "string",
+          "description": "Contact phone number."
+        }
+      },
+      "required": [
+        "apellidoYNombre",
+        "dni"
+      ]
     }
   },
   "auth": {
@@ -183,6 +219,16 @@
             "$ref": "#/entities/AdminRole"
           },
           "description": "Stores admin roles for users. Only accessible for reads by the assigned user."
+        }
+      },
+       {
+        "path": "/fiscales/{fiscalId}",
+        "definition": {
+          "entityName": "Fiscal",
+          "schema": {
+            "$ref": "#/entities/Fiscal"
+          },
+          "description": "Stores information about polling supervisors (fiscales)."
         }
       }
     ]
