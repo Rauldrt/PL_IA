@@ -107,6 +107,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         }
     }
     
+    const userMessages = messages || [];
     const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
     await saveMessage(newUserMessage);
     
@@ -115,7 +116,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
     try {
       const aiResponse = await chat({
-        history: messages.slice(-10).map(({ id, ...rest }) => rest), // Pass history without IDs
+        history: userMessages.slice(-10).map(({ id, ...rest }) => rest), // Pass history without IDs
         message: trimmedMessage,
         knowledge: knowledge,
       });
@@ -135,7 +136,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   // --- Effects ---
 
   const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
-    if (messages.length > 0) return;
+    if (!messages || messages.length > 0) return;
 
     setIsLoadingSuggestions(true);
     try {
@@ -151,7 +152,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [messages.length, toast]);
+  }, [messages, toast]);
 
   useEffect(() => {
     const fetchKnowledge = async () => {
@@ -218,11 +219,11 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
                 />
               )}
               
-              {isChatReady && (
+              {isChatReady && messages && (
                 messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)
               )}
 
-              {isLoading && (
+              {isLoading && hasMessages && (
                 <div className="flex items-start gap-4 py-4 justify-start">
                   <Avatar className="h-8 w-8 border">
                     {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
@@ -247,4 +248,3 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     </div>
   );
 }
-
