@@ -13,7 +13,7 @@ import { WelcomeScreen } from './WelcomeScreen';
 import { LoaderCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, doc, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, addDoc, serverTimestamp, orderBy, setDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -147,7 +147,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
     setIsLoadingSuggestions(true);
     try {
-      const result = await getSuggestions({knowledge: knowledgeContent});
+      const result = await getSuggestedMessages({knowledge: knowledgeContent});
        if (result.messages) {
         setSuggested(result.messages);
       }
@@ -205,10 +205,10 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   }, [messages, isLoading]);
 
   const hasMessages = messages && messages.length > 0;
-  // Show welcome screen if there is no session ID and messages are not being loaded.
-  const showWelcome = !sessionId && !isLoadingMessages;
-  // Always show input unless suggestions are loading for the first time.
-  const showInput = !isLoadingSuggestions;
+  // Show welcome screen if there are no messages and we aren't in a loading state.
+  const showWelcome = !hasMessages && !isLoadingMessages;
+  // Always show input unless it's the very first load for suggestions.
+  const showInput = !isLoadingSuggestions || hasMessages;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -255,5 +255,3 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     </div>
   );
 }
-
-    
