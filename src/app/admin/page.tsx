@@ -31,10 +31,13 @@ function AdminPageContent() {
   const [isParsing, setIsParsing] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const { toast } = useToast();
   const firestore = useFirestore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -96,6 +99,13 @@ function AdminPageContent() {
     }
   };
 
+  const handleLogoFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+    }
+  };
+
   const handleAvatarUpload = async () => {
     if (!avatarFile) {
       toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
@@ -128,6 +138,40 @@ function AdminPageContent() {
       setIsUploadingAvatar(false);
     }
   };
+
+  const handleLogoUpload = async () => {
+    if (!logoFile) {
+      toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
+      return;
+    }
+    if (!firestore) {
+      toast({ title: 'Error de Firestore', description: 'No se pudo inicializar la base de datos.', variant: 'destructive' });
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const storage = getStorage();
+      const storagePath = `app-config/app-logo/${logoFile.name}`;
+      const imageRef = storageRef(storage, storagePath);
+
+      await uploadBytes(imageRef, logoFile);
+      const downloadURL = await getDownloadURL(imageRef);
+
+      const configRef = doc(firestore, 'config', 'app-settings');
+      await setDoc(configRef, { appLogoUrl: downloadURL }, { merge: true });
+
+      toast({ title: 'Éxito', description: 'El logo de la aplicación ha sido actualizado.' });
+      setLogoFile(null);
+      if(logoInputRef.current) logoInputRef.current.value = '';
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      toast({ title: 'Error', description: 'No se pudo subir el logo.', variant: 'destructive' });
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -204,7 +248,7 @@ function AdminPageContent() {
                     <div className="flex-1">
                         <CardTitle>Configuración de la Aplicación</CardTitle>
                         <CardDescription className="mt-1">
-                            Personaliza la apariencia de tu asistente de IA.
+                            Personaliza la apariencia de tu asistente de IA y la aplicación.
                         </CardDescription>
                     </div>
                 </div>
@@ -234,6 +278,31 @@ function AdminPageContent() {
                         </Button>
                     </div>
                      {avatarFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {avatarFile.name}</p>}
+                </div>
+                <div className="space-y-2">
+                    <label htmlFor="logo-upload" className="font-medium">
+                        Logo de la Aplicación
+                    </label>
+                    <div className="flex items-center gap-4">
+                        <Input
+                            id="logo-upload"
+                            type="file"
+                            accept="image/*"
+                            ref={logoInputRef}
+                            onChange={handleLogoFileChange}
+                            className="flex-1"
+                        />
+                        <Button onClick={handleLogoUpload} disabled={!logoFile || isUploadingLogo}>
+                            {isUploadingLogo ? (
+                                <LoaderCircle className="animate-spin" />
+                            ) : (
+                                <>
+                                    <ImageUp className="mr-2 h-4 w-4" /> Subir
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                     {logoFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {logoFile.name}</p>}
                 </div>
             </CardContent>
         </Card>
@@ -364,5 +433,3 @@ export default function AdminPage() {
     </AdminGuard>
   )
 }
-
-    
