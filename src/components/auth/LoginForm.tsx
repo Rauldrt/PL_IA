@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { login, signup } from '@/firebase/auth/actions';
+import { signup } from '@/firebase/auth/actions';
 import { useAuth } from '@/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
@@ -36,44 +36,48 @@ export default function LoginForm() {
   const { toast } = useToast();
   const auth = useAuth();
 
-  const handleAuthAction = async (prevState: any, formData: FormData) => {
+  // Action for SIGNUP (Server Action)
+  const handleSignupAction = async (prevState: any, formData: FormData) => {
+    const result = await signup(prevState, formData);
+    if (result.success) {
+      toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
+      setIsSignup(false); // Switch back to login form
+    } else if (result.message) {
+      toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
+    }
+    return result;
+  };
+  
+  const [signupState, signupFormAction] = useActionState(handleSignupAction, { message: '', success: false });
+
+  // Handler for LOGIN (Client-side)
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    if (isSignup) {
-      const result = await signup(prevState, formData);
-      if (result.success) {
-        toast({ title: 'Éxito', description: 'Cuenta creada. Ahora puedes iniciar sesión.' });
-        setIsSignup(false); // Switch back to login form
-      } else if (result.message) {
-        toast({ title: 'Error de registro', description: result.message, variant: 'destructive' });
-      }
-      return result;
-    } else {
-      // Handle Login
-      if (!auth) {
-         toast({ title: 'Error', description: 'Servicio de autenticación no disponible.', variant: 'destructive' });
-         return { message: 'Servicio de autenticación no disponible.', success: false };
-      }
-      try {
-          await signInWithEmailAndPassword(auth, email, password);
-          toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
-          router.push('/chat');
-          return { message: 'Success', success: true };
-      } catch (error: any) {
-           let message = 'Ocurrió un error inesperado.';
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-                message = 'El email o la contraseña son incorrectos.';
-            } else {
-                message = `Error de inicio de sesión: ${error.message}`;
-            }
-          toast({ title: 'Error de inicio de sesión', description: message, variant: 'destructive' });
-          return { message: message, success: false };
-      }
+    if (!auth) {
+       toast({ title: 'Error', description: 'Servicio de autenticación no disponible.', variant: 'destructive' });
+       return;
+    }
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        toast({ title: 'Éxito', description: 'Inicio de sesión exitoso.' });
+        router.push('/chat');
+    } catch (error: any) {
+         let message = 'Ocurrió un error inesperado.';
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+              message = 'El email o la contraseña son incorrectos.';
+          } else {
+              message = `Error de inicio de sesión: ${error.message}`;
+          }
+        toast({ title: 'Error de inicio de sesión', description: message, variant: 'destructive' });
     }
   };
   
-  const [authState, formAction] = useActionState(handleAuthAction, { message: '', success: false });
+  // Decide which form handler to use
+  const formAction = isSignup ? signupFormAction : handleLogin;
 
   return (
     <Card className="w-full">
@@ -88,7 +92,7 @@ export default function LoginForm() {
                 </span>
             </div>
         </div>
-        <form action={formAction} className="space-y-4">
+        <form action={isSignup ? signupFormAction : undefined} onSubmit={isSignup ? undefined : handleLogin} className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" name="email" type="email" placeholder="tu@email.com" required />
@@ -97,7 +101,17 @@ export default function LoginForm() {
                 <Label htmlFor="password">Contraseña</Label>
                 <Input id="password" name="password" type="password" required />
             </div>
-            <SubmitButton isSignup={isSignup} />
+            {/* The form hook only works when a server action is passed to the form's `action` prop.
+                For client-side submissions, we can't use useFormStatus, so we'll just show the default button.
+                A more advanced implementation could use state to manage the loading status for client-side login.
+             */}
+             {isSignup ? (
+                <SubmitButton isSignup={isSignup} />
+             ) : (
+                <Button type="submit" className="w-full" size="lg">
+                    Iniciar Sesión <ArrowRight />
+                </Button>
+             )}
         </form>
       </CardContent>
       <CardFooter className="flex flex-col gap-4">
