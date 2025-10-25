@@ -5,12 +5,16 @@ import { useRouter } from 'next/navigation';
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons';
-import { useAuth } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
+import { useIsAdmin } from '@/hooks/use-is-admin';
 
 export default function AuthChatHeader() {
   const router = useRouter();
   const auth = useAuth();
+  const { user } = useUser();
+  const { isAdmin, isLoading: isAdminLoading } = useIsAdmin(user?.uid);
+
 
   const handleLogout = async () => {
     if (auth) {
@@ -26,9 +30,11 @@ export default function AuthChatHeader() {
         <h1 className="font-headline text-xl font-bold text-foreground">Conecta IA</h1>
       </Link>
       <div className="flex items-center gap-4">
-        <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-            <ShieldCheck size={16} /> Admin
-        </Link>
+        {!isAdminLoading && isAdmin && (
+            <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                <ShieldCheck size={16} /> Admin
+            </Link>
+        )}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           Cerrar Sesión

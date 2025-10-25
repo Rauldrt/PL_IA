@@ -13,13 +13,14 @@ import { LoaderCircle, FileUp, FileText } from 'lucide-react';
 import AuthChatHeader from '@/components/auth/ChatHeader';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import AdminGuard from '@/components/auth/AdminGuard';
 
 // Configure the worker for pdfjs-dist
 if (typeof window !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
-export default function AdminPage() {
+function AdminPageContent() {
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
   const [url, setUrl] = useState('');
@@ -260,4 +261,12 @@ export default function AdminPage() {
       </main>
     </div>
   );
+}
+
+export default function AdminPage() {
+    return (
+        <AdminGuard>
+            <AdminPageContent />
+        </AdminGuard>
+    )
 }
