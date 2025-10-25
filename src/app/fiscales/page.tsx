@@ -75,8 +75,17 @@ function FiscalesPageContent() {
     const handlePaste = () => {
         const rows = pastedData.trim().split('\n');
         const nuevosFiscales: Fiscal[] = [];
+        let parsingError = false;
+
         rows.forEach((row, index) => {
-            const columns = row.split('\t');
+            if (parsingError) return;
+
+            // Try splitting by tab first, then by comma
+            let columns = row.split('\t');
+            if (columns.length < 6) {
+                columns = row.split(',').map(s => s.trim());
+            }
+
             if (columns.length >= 6) {
                 const [apellidoYNombre, dni, rol, escuela, mesa, telefono] = columns;
                 const parsedRol = rol.trim().toUpperCase() === 'GENERAL' ? 'GENERAL' : 'MESA';
@@ -94,10 +103,18 @@ function FiscalesPageContent() {
                     description: 'La fila no tiene el número de columnas esperado (6).',
                     variant: 'destructive',
                 });
+                parsingError = true;
             }
         });
-        setFiscales(prev => [...prev, ...nuevosFiscales]);
-        setPastedData('');
+
+        if (!parsingError) {
+            setFiscales(prev => [...prev, ...nuevosFiscales]);
+            setPastedData('');
+            toast({
+                title: 'Datos procesados',
+                description: `${nuevosFiscales.length} fiscales agregados a la lista.`,
+            });
+        }
     };
 
     const handleRemoveFiscal = (index: number) => {
@@ -311,3 +328,5 @@ export default function FiscalesPage() {
         </AdminGuard>
     );
 }
+
+    
