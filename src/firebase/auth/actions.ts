@@ -3,7 +3,8 @@
 import { z } from 'zod';
 import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { initializeFirebaseAdmin } from '@/firebase/admin';
-import { doc, setDoc, writeBatch, getDoc, getFirestore } from 'firebase-admin/firestore';
+import { doc, setDoc, writeBatch } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 
 
 const schema = z.object({
@@ -82,44 +83,6 @@ export async function signup(
     // We should also delete the user from Auth to avoid a dangling account
     await auth.deleteUser(userRecord.uid);
     return { message, success: false };
-  }
-}
-
-export async function handleGoogleSignIn(uid: string, email: string): Promise<{ success: boolean; message: string }> {
-  const app = initializeFirebaseAdmin();
-  const firestore = getFirestore(app);
-
-  const userDocRef = doc(firestore, 'users', uid);
-
-  try {
-    const userDoc = await getDoc(userDocRef);
-
-    // If user document doesn't exist, it's a first-time Google Sign-In
-    if (!userDoc.exists()) {
-      const batch = writeBatch(firestore);
-
-      const newUserdata = {
-        email,
-        createdAt: new Date().toISOString(),
-      };
-      batch.set(userDocRef, newUserdata);
-
-      const adminRoleRef = doc(firestore, 'roles_admin', uid);
-      const adminData = {
-        isAdmin: true,
-        assignedAt: new Date().toISOString(),
-      };
-      batch.set(adminRoleRef, adminData);
-
-      await batch.commit();
-      return { success: true, message: 'Nuevo usuario de Google creado y asignado como administrador.' };
-    }
-
-    // User already exists, just a regular sign-in
-    return { success: true, message: 'Usuario de Google existente ha iniciado sesión.' };
-  } catch (error: any) {
-    console.error('Google Sign-In server error:', error);
-    return { success: false, message: 'No se pudo procesar el inicio de sesión de Google en el servidor.' };
   }
 }
 
