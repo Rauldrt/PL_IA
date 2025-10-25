@@ -113,14 +113,21 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "AdminRole",
       "type": "object",
-      "description": "A document in the 'roles_admin' collection indicates that the user has admin privileges.",
+      "description": "A document in the 'roles_admin' collection indicates that the user has admin privileges. The document itself can be empty or contain relevant metadata.",
       "properties": {
         "isAdmin": {
-            "type": "boolean",
-            "description": "Must be true to indicate admin role."
+          "type": "boolean",
+          "description": "A flag to signify admin status, typically true."
+        },
+        "assignedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp for when the admin role was assigned."
         }
       },
-      "required": ["isAdmin"]
+      "required": [
+        "isAdmin"
+      ]
     }
   },
   "auth": {
@@ -177,7 +184,7 @@
           "schema": {
             "$ref": "#/entities/AdminRole"
           },
-          "description": "A document in this collection indicates that the user has admin privileges."
+          "description": "A document in this collection indicates that the user has admin privileges. Its existence grants admin rights."
         }
       }
     ]
