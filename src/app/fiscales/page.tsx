@@ -160,30 +160,30 @@ function FiscalesPageContent() {
                 <div className="mx-auto max-w-7xl space-y-8">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                                 <div className="flex-1">
                                     <CardTitle>Fiscales Guardados</CardTitle>
                                     <CardDescription className="mt-1">
                                         Visualiza y gestiona los fiscales actualmente en la base de datos.
                                     </CardDescription>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex w-full sm:w-auto flex-col sm:flex-row items-center gap-2">
                                      { !isAdminLoading && isAdmin && (
                                         <>
-                                            <Button onClick={handleExportAndSharePDF}>
+                                            <Button onClick={handleExportAndSharePDF} className="w-full sm:w-auto">
                                                 <FileDown className="mr-2 h-4 w-4" />
                                                 Exportar PDF
                                             </Button>
-                                            <Link href="/fiscales/cargar" passHref>
-                                                <Button>
+                                            <Link href="/fiscales/cargar" passHref className="w-full sm:w-auto">
+                                                <Button className="w-full">
                                                     <UserPlus className="mr-2 h-4 w-4" />
-                                                    Cargar Nuevos Fiscales
+                                                    Cargar Nuevos
                                                 </Button>
                                             </Link>
                                         </>
                                      )}
-                                    <Link href="/chat" passHref>
-                                        <Button variant="outline">
+                                    <Link href="/chat" passHref className="w-full sm:w-auto">
+                                        <Button variant="outline" className="w-full">
                                             <MessageCircle className="mr-2 h-4 w-4" />
                                             Volver al Chat
                                         </Button>
@@ -208,46 +208,48 @@ function FiscalesPageContent() {
                         ) : (
                             Object.entries(savedFiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
                                 <Card key={escuela}>
-                                    <CardHeader>
+                                    <CardHeader className="py-4 px-4 sm:px-6">
                                         <CardTitle className="text-lg">{escuela}</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Apellido y Nombre</TableHead>
-                                                    <TableHead>DNI</TableHead>
-                                                    <TableHead>Mesa</TableHead>
-                                                    <TableHead>Rol</TableHead>
-                                                    <TableHead>Contacto</TableHead>
-                                                    {isAdmin && <TableHead>Acción</TableHead>}
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {fiscalesDeEscuela.map((fiscal) => (
-                                                    <TableRow key={fiscal.id}>
-                                                        <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
-                                                        <TableCell>{fiscal.dni}</TableCell>
-                                                        <TableCell>{fiscal.mesa}</TableCell>
-                                                        <TableCell>{fiscal.rol}</TableCell>
-                                                        <TableCell>
-                                                            <Button asChild variant="ghost" size="icon" disabled={!fiscal.telefono}>
-                                                                <a href={formatWhatsAppLink(fiscal.telefono)} target="_blank" rel="noopener noreferrer">
-                                                                     <WhatsAppIcon className="h-5 w-5 text-green-500" />
-                                                                </a>
-                                                            </Button>
-                                                        </TableCell>
-                                                        {isAdmin && (
-                                                            <TableCell>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
-                                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                                </Button>
-                                                            </TableCell>
-                                                        )}
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+                                    <CardContent className="p-0">
+                                        <div className="overflow-x-auto">
+                                          <Table>
+                                              <TableHeader>
+                                                  <TableRow>
+                                                      <TableHead>Apellido y Nombre</TableHead>
+                                                      <TableHead className="hidden sm:table-cell">DNI</TableHead>
+                                                      <TableHead>Mesa</TableHead>
+                                                      <TableHead className="hidden md:table-cell">Rol</TableHead>
+                                                      <TableHead>Contacto</TableHead>
+                                                      {isAdmin && <TableHead className="text-right">Acción</TableHead>}
+                                                  </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                  {fiscalesDeEscuela.map((fiscal) => (
+                                                      <TableRow key={fiscal.id}>
+                                                          <TableCell className="font-medium max-w-[150px] truncate sm:max-w-none">{fiscal.apellidoYNombre}</TableCell>
+                                                          <TableCell className="hidden sm:table-cell">{fiscal.dni}</TableCell>
+                                                          <TableCell>{fiscal.mesa}</TableCell>
+                                                          <TableCell className="hidden md:table-cell">{fiscal.rol}</TableCell>
+                                                          <TableCell>
+                                                              <Button asChild variant="ghost" size="icon" disabled={!fiscal.telefono}>
+                                                                  <a href={formatWhatsAppLink(fiscal.telefono)} target="_blank" rel="noopener noreferrer">
+                                                                       <WhatsAppIcon className="h-5 w-5 text-green-500" />
+                                                                  </a>
+                                                              </Button>
+                                                          </TableCell>
+                                                          {isAdmin && (
+                                                              <TableCell className="text-right">
+                                                                  <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
+                                                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                                                  </Button>
+                                                              </TableCell>
+                                                          )}
+                                                      </TableRow>
+                                                  ))}
+                                              </TableBody>
+                                          </Table>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))

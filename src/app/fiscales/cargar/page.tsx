@@ -195,7 +195,7 @@ function CargarFiscalesPageContent() {
                 <div className="mx-auto max-w-7xl space-y-8">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                                 <div className="flex-1">
                                     <CardTitle>Cargar Fiscales</CardTitle>
                                     <CardDescription className="mt-1">
@@ -203,7 +203,7 @@ function CargarFiscalesPageContent() {
                                     </CardDescription>
                                 </div>
                                 <Link href="/fiscales" passHref>
-                                    <Button variant="outline">
+                                    <Button variant="outline" className="w-full sm:w-auto">
                                         <Eye className="mr-2 h-4 w-4" />
                                         Ver Fiscales Guardados
                                     </Button>
@@ -220,8 +220,8 @@ function CargarFiscalesPageContent() {
                                     <CardTitle>Agregar Fiscal Manualmente</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2 sm:col-span-2">
                                             <Label htmlFor="apellidoYNombre">Apellido y Nombre</Label>
                                             <Input name="apellidoYNombre" value={formState.apellidoYNombre} onChange={handleFormChange} />
                                         </div>
@@ -230,16 +230,16 @@ function CargarFiscalesPageContent() {
                                             <Input name="dni" value={formState.dni} onChange={handleFormChange} />
                                         </div>
                                         <div className="space-y-2">
+                                            <Label htmlFor="telefono">Teléfono</Label>
+                                            <Input name="telefono" value={formState.telefono} onChange={handleFormChange} />
+                                        </div>
+                                        <div className="space-y-2 sm:col-span-2">
                                             <Label htmlFor="escuela">Escuela</Label>
                                             <Input name="escuela" value={formState.escuela} onChange={handleFormChange} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="mesa">Mesa</Label>
                                             <Input name="mesa" value={formState.mesa} onChange={handleFormChange} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="telefono">Teléfono</Label>
-                                            <Input name="telefono" value={formState.telefono} onChange={handleFormChange} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="rol">Rol</Label>
@@ -285,14 +285,14 @@ function CargarFiscalesPageContent() {
                         <div className="space-y-6 lg:col-span-1">
                              <Card>
                                 <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <div>
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className='flex-1'>
                                         <CardTitle>Fiscales para Guardar</CardTitle>
                                         <CardDescription>
-                                            Actualmente hay {fiscales.length} fiscales en la lista para ser guardados.
+                                            Actualmente hay {fiscales.length} fiscales en la lista.
                                         </CardDescription>
                                     </div>
-                                    <Button onClick={handleSaveAll} disabled={fiscales.length === 0 || isSaving}>
+                                    <Button onClick={handleSaveAll} disabled={fiscales.length === 0 || isSaving} className="w-full sm:w-auto">
                                         {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin"/> : null}
                                         Guardar Todo
                                     </Button>
@@ -304,36 +304,38 @@ function CargarFiscalesPageContent() {
                                 ) : (
                                     Object.entries(fiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
                                         <Card key={escuela} className="bg-muted/50">
-                                            <CardHeader className="py-3">
-                                                <CardTitle className="text-lg">{escuela}</CardTitle>
+                                            <CardHeader className="py-3 px-4 sm:px-6">
+                                                <CardTitle className="text-base sm:text-lg">{escuela}</CardTitle>
                                             </CardHeader>
-                                            <CardContent>
-                                                <Table>
-                                                    <TableHeader>
-                                                        <TableRow>
-                                                            <TableHead>Apellido y Nombre</TableHead>
-                                                            <TableHead>DNI</TableHead>
-                                                            <TableHead>Mesa</TableHead>
-                                                            <TableHead>Rol</TableHead>
-                                                            <TableHead>Acción</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {fiscalesDeEscuela.map((fiscal) => (
-                                                            <TableRow key={fiscal.dni}>
-                                                                <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
-                                                                <TableCell>{fiscal.dni}</TableCell>
-                                                                <TableCell>{fiscal.mesa}</TableCell>
-                                                                <TableCell>{fiscal.rol}</TableCell>
-                                                                <TableCell>
-                                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(fiscal.dni)}>
-                                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                                    </Button>
-                                                                </TableCell>
+                                            <CardContent className="p-0">
+                                                <div className="overflow-x-auto">
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>Apellido y Nombre</TableHead>
+                                                                <TableHead className='hidden sm:table-cell'>DNI</TableHead>
+                                                                <TableHead>Mesa</TableHead>
+                                                                <TableHead className='hidden sm:table-cell'>Rol</TableHead>
+                                                                <TableHead>Acción</TableHead>
                                                             </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {fiscalesDeEscuela.map((fiscal) => (
+                                                                <TableRow key={fiscal.dni}>
+                                                                    <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
+                                                                    <TableCell className='hidden sm:table-cell'>{fiscal.dni}</TableCell>
+                                                                    <TableCell>{fiscal.mesa}</TableCell>
+                                                                    <TableCell className='hidden sm:table-cell'>{fiscal.rol}</TableCell>
+                                                                    <TableCell>
+                                                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(fiscal.dni)}>
+                                                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                                                        </Button>
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
                                             </CardContent>
                                         </Card>
                                     ))
@@ -356,5 +358,3 @@ export default function CargarFiscalesPage() {
         </AdminGuard>
     );
 }
-
-    

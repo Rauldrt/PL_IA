@@ -25,25 +25,25 @@ export default function AuthChatHeader() {
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 sm:px-6">
-      <Link href="/chat" className="flex items-center gap-3">
+      <Link href="/chat" className="flex items-center gap-2 sm:gap-3">
         <Logo width={40} height={40} />
-        <h1 className="font-headline text-xl font-bold text-foreground">Conecta IA</h1>
+        <h1 className="font-headline text-lg sm:text-xl font-bold text-foreground">Conecta IA</h1>
       </Link>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
-            <Briefcase size={16} /> Fiscales
+            <Briefcase size={16} /> <span className="hidden sm:inline">Fiscales</span>
         </Link>
         {!isAdminLoading && isAdmin && (
-            <Link href="/admin" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+            <Link href="/admin" className="hidden sm:flex text-sm font-medium text-primary hover:underline items-center gap-1">
                 <ShieldCheck size={16} /> Admin
             </Link>
         )}
         {user?.email && (
-            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <span className="hidden md:inline text-sm text-muted-foreground">{user.email}</span>
         )}
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          Cerrar Sesión
+        <Button variant="ghost" size="sm" onClick={handleLogout} className="p-2 sm:p-4">
+          <LogOut className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Cerrar Sesión</span>
         </Button>
       </div>
     </header>
