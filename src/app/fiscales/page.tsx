@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface Fiscal {
     apellidoYNombre: string;
@@ -137,11 +139,13 @@ function FiscalesPageContent() {
         }
 
         setIsSaving(true);
+        const fiscalesCollection = collection(firestore, 'fiscales');
+        
         try {
             const batch = writeBatch(firestore);
             
             fiscales.forEach(fiscal => {
-                const docRef = doc(collection(firestore, 'fiscales'));
+                const docRef = doc(fiscalesCollection);
                 batch.set(docRef, fiscal);
             });
 
@@ -153,12 +157,21 @@ function FiscalesPageContent() {
             });
             setFiscales([]);
         } catch (error: any) {
-            console.error('Error saving fiscales:', error);
-            toast({
-                title: 'Error al guardar',
-                description: error.message || 'No se pudieron guardar los fiscales en la base de datos.',
-                variant: 'destructive',
-            });
+            if (error.code === 'permission-denied') {
+                const permissionError = new FirestorePermissionError({
+                    path: fiscalesCollection.path,
+                    operation: 'create', // Batch write is a 'create' operation here
+                    requestResourceData: fiscales, // Send all data for context
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } else {
+                console.error('Error saving fiscales:', error);
+                toast({
+                    title: 'Error al guardar',
+                    description: error.message || 'No se pudieron guardar los fiscales en la base de datos.',
+                    variant: 'destructive',
+                });
+            }
         } finally {
             setIsSaving(false);
         }
@@ -328,5 +341,3 @@ export default function FiscalesPage() {
         </AdminGuard>
     );
 }
-
-    
