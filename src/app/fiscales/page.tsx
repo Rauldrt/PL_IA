@@ -12,13 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore } from '@/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, writeBatch, doc, deleteDoc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 interface Fiscal {
+    id?: string;
     apellidoYNombre: string;
     dni: string;
     rol: 'GENERAL' | 'MESA';
@@ -28,8 +29,8 @@ interface Fiscal {
 }
 
 function FiscalesPageContent() {
-    const [fiscales, setFiscales] = useState<Fiscal[]>([]);
-    const [formState, setFormState] = useState<Fiscal>({
+    const [fiscales, setFiscales] = useState<Omit<Fiscal, 'id'>[]>([]);
+    const [formState, setFormState] = useState<Omit<Fiscal, 'id'>>({
         apellidoYNombre: '',
         dni: '',
         rol: 'MESA',
@@ -41,6 +42,13 @@ function FiscalesPageContent() {
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
     const firestore = useFirestore();
+
+    const fiscalesCollectionRef = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'fiscales');
+    }, [firestore]);
+
+    const { data: savedFiscales, isLoading: isLoadingFiscales } = useCollection<Fiscal>(fiscalesCollectionRef);
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -76,7 +84,7 @@ function FiscalesPageContent() {
 
     const handlePaste = () => {
         const rows = pastedData.trim().split('\n');
-        const nuevosFiscales: Fiscal[] = [];
+        const nuevosFiscales: Omit<Fiscal, 'id'>[] = [];
         let parsingError = false;
 
         rows.forEach((row, index) => {
@@ -121,6 +129,33 @@ function FiscalesPageContent() {
     const handleRemoveFiscal = (dniToRemove: string) => {
         setFiscales(prev => prev.filter(fiscal => fiscal.dni !== dniToRemove));
     };
+    
+    const handleDeleteSavedFiscal = async (fiscalId: string) => {
+        if (!firestore) return;
+        
+        toast({
+          title: 'Eliminando fiscal...',
+          description: 'Por favor, espera.',
+        });
+
+        const docRef = doc(firestore, 'fiscales', fiscalId);
+        
+        deleteDoc(docRef)
+        .then(() => {
+          toast({
+            title: 'Éxito',
+            description: 'El fiscal ha sido eliminado.',
+          });
+        })
+        .catch((serverError) => {
+            const permissionError = new FirestorePermissionError({
+                path: docRef.path,
+                operation: 'delete',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        });
+    };
+
 
     const handleSaveAll = async () => {
         if (fiscales.length === 0) {
@@ -139,41 +174,33 @@ function FiscalesPageContent() {
 
         setIsSaving(true);
         
-        try {
-            const batch = writeBatch(firestore);
-            const fiscalesCollection = collection(firestore, 'fiscales');
-            
-            fiscales.forEach(fiscal => {
-                const docRef = doc(fiscalesCollection);
-                batch.set(docRef, fiscal);
-            });
+        const batch = writeBatch(firestore);
+        const fiscalesCollection = collection(firestore, 'fiscales');
+        
+        fiscales.forEach(fiscal => {
+            const docRef = doc(fiscalesCollection);
+            batch.set(docRef, fiscal);
+        });
 
-            await batch.commit();
-
-            toast({
-                title: 'Éxito',
-                description: `${fiscales.length} fiscales han sido guardados correctamente.`,
-            });
-            setFiscales([]);
-        } catch (error: any) {
-            const fiscalesCollectionPath = 'fiscales';
-            if (error.code === 'permission-denied') {
+        batch.commit()
+            .then(() => {
+                toast({
+                    title: 'Éxito',
+                    description: `${fiscales.length} fiscales han sido guardados correctamente.`,
+                });
+                setFiscales([]);
+            })
+            .catch((error: any) => {
+                const fiscalesCollectionPath = 'fiscales';
                 const permissionError = new FirestorePermissionError({
                     path: fiscalesCollectionPath,
-                    operation: 'create', // This represents the batch operation intent
+                    operation: 'create',
                 });
                 errorEmitter.emit('permission-error', permissionError);
-            } else {
-                console.error('Error saving fiscales:', error);
-                toast({
-                    title: 'Error al guardar',
-                    description: error.message || 'No se pudieron guardar los fiscales en la base de datos.',
-                    variant: 'destructive',
-                });
-            }
-        } finally {
-            setIsSaving(false);
-        }
+            })
+            .finally(() => {
+                setIsSaving(false);
+            });
     };
     
     const fiscalesByEscuela = useMemo(() => {
@@ -184,8 +211,20 @@ function FiscalesPageContent() {
             }
             acc[escuela].push(fiscal);
             return acc;
-        }, {} as Record<string, Fiscal[]>);
+        }, {} as Record<string, Omit<Fiscal, 'id'>[]>);
     }, [fiscales]);
+
+    const savedFiscalesByEscuela = useMemo(() => {
+        if (!savedFiscales) return {};
+        return savedFiscales.reduce((acc, fiscal) => {
+            const escuela = fiscal.escuela || 'Sin Escuela Asignada';
+            if (!acc[escuela]) {
+                acc[escuela] = [];
+            }
+            acc[escuela].push(fiscal);
+            return acc;
+        }, {} as Record<string, Fiscal[]>);
+    }, [savedFiscales]);
 
 
     return (
@@ -213,7 +252,7 @@ function FiscalesPageContent() {
                     </Card>
 
                     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                        {/* Manual Entry and Paste Section */}
+                        {/* Entry Column */}
                         <div className="space-y-8">
                             <Card>
                                 <CardHeader>
@@ -279,10 +318,7 @@ function FiscalesPageContent() {
                                     </Button>
                                 </CardContent>
                             </Card>
-                        </div>
-                        
-                        <div className="space-y-6 lg:col-span-1">
-                            <Card>
+                             <Card>
                                 <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -297,16 +333,73 @@ function FiscalesPageContent() {
                                     </Button>
                                 </div>
                                 </CardHeader>
+                                <CardContent className="max-h-[500px] overflow-y-auto space-y-4">
+                                {Object.keys(fiscalesByEscuela).length === 0 ? (
+                                    <p className="text-center text-muted-foreground pt-4">No hay fiscales en la lista para guardar.</p>
+                                ) : (
+                                    Object.entries(fiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
+                                        <Card key={escuela} className="bg-muted/50">
+                                            <CardHeader className="py-3">
+                                                <CardTitle className="text-lg">{escuela}</CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Apellido y Nombre</TableHead>
+                                                            <TableHead>DNI</TableHead>
+                                                            <TableHead>Mesa</TableHead>
+                                                            <TableHead>Rol</TableHead>
+                                                            <TableHead>Acción</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {fiscalesDeEscuela.map((fiscal) => (
+                                                            <TableRow key={fiscal.dni}>
+                                                                <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
+                                                                <TableCell>{fiscal.dni}</TableCell>
+                                                                <TableCell>{fiscal.mesa}</TableCell>
+                                                                <TableCell>{fiscal.rol}</TableCell>
+                                                                <TableCell>
+                                                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(fiscal.dni)}>
+                                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </CardContent>
+                                        </Card>
+                                    ))
+                                )}
+                                </CardContent>
                             </Card>
-                            <div className="space-y-4 max-h-[700px] overflow-auto pr-2">
-                            {Object.keys(fiscalesByEscuela).length === 0 ? (
+                        </div>
+                        
+                        {/* Saved Fiscales Column */}
+                        <div className="space-y-6 lg:col-span-1">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Fiscales Guardados</CardTitle>
+                                    <CardDescription>
+                                        Estos son los fiscales actualmente en la base de datos.
+                                    </CardDescription>
+                                </CardHeader>
+                            </Card>
+                            <div className="space-y-4 max-h-[1200px] overflow-auto pr-2">
+                            {isLoadingFiscales ? (
+                                <div className="flex justify-center items-center pt-10">
+                                    <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : Object.keys(savedFiscalesByEscuela).length === 0 ? (
                                 <Card>
                                     <CardContent className="pt-6">
-                                    <p className="text-center text-muted-foreground">No hay fiscales en la lista.</p>
+                                        <p className="text-center text-muted-foreground">No hay fiscales guardados en la base de datos.</p>
                                     </CardContent>
                                 </Card>
                             ) : (
-                                Object.entries(fiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
+                                Object.entries(savedFiscalesByEscuela).map(([escuela, fiscalesDeEscuela]) => (
                                     <Card key={escuela}>
                                         <CardHeader>
                                             <CardTitle className="text-lg">{escuela}</CardTitle>
@@ -324,13 +417,13 @@ function FiscalesPageContent() {
                                                 </TableHeader>
                                                 <TableBody>
                                                     {fiscalesDeEscuela.map((fiscal) => (
-                                                        <TableRow key={fiscal.dni}>
+                                                        <TableRow key={fiscal.id}>
                                                             <TableCell className="font-medium">{fiscal.apellidoYNombre}</TableCell>
                                                             <TableCell>{fiscal.dni}</TableCell>
                                                             <TableCell>{fiscal.mesa}</TableCell>
                                                             <TableCell>{fiscal.rol}</TableCell>
                                                             <TableCell>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleRemoveFiscal(fiscal.dni)}>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSavedFiscal(fiscal.id!)}>
                                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                                 </Button>
                                                             </TableCell>
@@ -359,3 +452,5 @@ export default function FiscalesPage() {
         </AdminGuard>
     );
 }
+
+    
