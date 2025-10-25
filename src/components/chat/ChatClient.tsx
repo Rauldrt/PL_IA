@@ -15,6 +15,8 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,19 +31,28 @@ export default function ChatClient() {
   useEffect(() => {
     const fetchKnowledge = async () => {
       if (!firestore) return;
+      const knowledgeCollection = collection(firestore, 'knowledgeSources');
       try {
-        const knowledgeCollection = collection(firestore, 'knowledgeSources');
         const knowledgeSnapshot = await getDocs(knowledgeCollection);
         let allContent = '';
         knowledgeSnapshot.forEach(doc => {
           allContent += doc.data().content + '\n\n';
         });
         setKnowledge(allContent);
-      } catch (error) {
-        console.error('Error fetching knowledge base:', error);
+      } catch (error: any) {
+        // Create and emit the detailed permission error
+        if (error.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: knowledgeCollection.path,
+            operation: 'list', // 'list' for collection queries
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+
+        // Show a user-friendly toast, while the developer sees the detailed error overlay
         toast({
           title: 'Error de Conocimiento',
-          description: 'No se pudo cargar la base de conocimiento.',
+          description: 'No se pudo cargar la base de conocimiento debido a un problema de permisos.',
           variant: 'destructive',
         });
       }
