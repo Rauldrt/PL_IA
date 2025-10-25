@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { LoaderCircle, FileUp, FileText, MessageCircle, ImageUp } from 'lucide-react';
+import { LoaderCircle, FileUp, FileText, MessageCircle } from 'lucide-react';
 import AuthChatHeader from '@/components/auth/ChatHeader';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -29,16 +29,9 @@ function AdminPageContent() {
   const [fileName, setFileName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const { toast } = useToast();
   const firestore = useFirestore();
-  const firebaseApp = useFirebaseApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,87 +85,6 @@ function AdminPageContent() {
     };
     reader.readAsArrayBuffer(file);
   };
-
-  const handleAvatarFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
-    }
-  };
-
-  const handleLogoFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLogoFile(file);
-    }
-  };
-
-  const handleAvatarUpload = async () => {
-    if (!avatarFile) {
-      toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
-      return;
-    }
-    if (!firestore || !firebaseApp) {
-      toast({ title: 'Error de Firebase', description: 'No se pudo inicializar la base de datos o el almacenamiento.', variant: 'destructive' });
-      return;
-    }
-
-    setIsUploadingAvatar(true);
-    try {
-      const storage = getStorage(firebaseApp);
-      const storagePath = `app-config/ai-avatar/${avatarFile.name}`;
-      const imageRef = storageRef(storage, storagePath);
-
-      await uploadBytes(imageRef, avatarFile);
-      const downloadURL = await getDownloadURL(imageRef);
-
-      const configRef = doc(firestore, 'config', 'app-settings');
-      await setDoc(configRef, { aiAvatarUrl: downloadURL }, { merge: true });
-
-      toast({ title: 'Éxito', description: 'El avatar del asistente de IA ha sido actualizado.' });
-      setAvatarFile(null);
-      if(avatarInputRef.current) avatarInputRef.current.value = '';
-    } catch (error) {
-      console.error('Error uploading avatar:', error);
-      toast({ title: 'Error', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-    } finally {
-      setIsUploadingAvatar(false);
-    }
-  };
-
-  const handleLogoUpload = async () => {
-    if (!logoFile) {
-      toast({ title: 'Error', description: 'Por favor, selecciona una imagen.', variant: 'destructive' });
-      return;
-    }
-    if (!firestore || !firebaseApp) {
-      toast({ title: 'Error de Firebase', description: 'No se pudo inicializar la base de datos o el almacenamiento.', variant: 'destructive' });
-      return;
-    }
-
-    setIsUploadingLogo(true);
-    try {
-      const storage = getStorage(firebaseApp);
-      const storagePath = `app-config/app-logo/${logoFile.name}`;
-      const imageRef = storageRef(storage, storagePath);
-
-      await uploadBytes(imageRef, logoFile);
-      const downloadURL = await getDownloadURL(imageRef);
-
-      const configRef = doc(firestore, 'config', 'app-settings');
-      await setDoc(configRef, { appLogoUrl: downloadURL }, { merge: true });
-
-      toast({ title: 'Éxito', description: 'El logo de la aplicación ha sido actualizado.' });
-      setLogoFile(null);
-      if(logoInputRef.current) logoInputRef.current.value = '';
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      toast({ title: 'Error', description: 'No se pudo subir el logo.', variant: 'destructive' });
-    } finally {
-      setIsUploadingLogo(false);
-    }
-  };
-
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -243,70 +155,6 @@ function AdminPageContent() {
       <AuthChatHeader />
       <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="mx-auto max-w-2xl space-y-8">
-        <Card>
-            <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                        <CardTitle>Configuración de la Aplicación</CardTitle>
-                        <CardDescription className="mt-1">
-                            Personaliza la apariencia de tu asistente de IA y la aplicación.
-                        </CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="space-y-2">
-                    <label htmlFor="avatar-upload" className="font-medium">
-                        Avatar del Asistente de IA
-                    </label>
-                    <div className="flex items-center gap-4">
-                        <Input
-                            id="avatar-upload"
-                            type="file"
-                            accept="image/*"
-                            ref={avatarInputRef}
-                            onChange={handleAvatarFileChange}
-                            className="flex-1"
-                        />
-                        <Button onClick={handleAvatarUpload} disabled={!avatarFile || isUploadingAvatar}>
-                            {isUploadingAvatar ? (
-                                <LoaderCircle className="animate-spin" />
-                            ) : (
-                                <>
-                                    <ImageUp className="mr-2 h-4 w-4" /> Subir
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                     {avatarFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {avatarFile.name}</p>}
-                </div>
-                <div className="space-y-2">
-                    <label htmlFor="logo-upload" className="font-medium">
-                        Logo de la Aplicación
-                    </label>
-                    <div className="flex items-center gap-4">
-                        <Input
-                            id="logo-upload"
-                            type="file"
-                            accept="image/*"
-                            ref={logoInputRef}
-                            onChange={handleLogoFileChange}
-                            className="flex-1"
-                        />
-                        <Button onClick={handleLogoUpload} disabled={!logoFile || isUploadingLogo}>
-                            {isUploadingLogo ? (
-                                <LoaderCircle className="animate-spin" />
-                            ) : (
-                                <>
-                                    <ImageUp className="mr-2 h-4 w-4" /> Subir
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                     {logoFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {logoFile.name}</p>}
-                </div>
-            </CardContent>
-        </Card>
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
@@ -432,5 +280,5 @@ export default function AdminPage() {
     <AdminGuard>
       <AdminPageContent />
     </AdminGuard>
-  )
+  );
 }

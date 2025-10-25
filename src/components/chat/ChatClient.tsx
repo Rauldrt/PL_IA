@@ -12,10 +12,11 @@ import ChatInputForm from './ChatInputForm';
 import { WelcomeScreen } from './WelcomeScreen';
 import { LoaderCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useFirestore, useUser, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { collection, query, where, getDocs, doc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -28,12 +29,8 @@ export default function ChatClient() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const firestore = useFirestore();
 
-  const configRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return doc(firestore, 'config', 'app-settings');
-  }, [firestore]);
-
-  const { data: appConfig } = useDoc<{ aiAvatarUrl: string }>(configRef);
+  const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar');
+  const aiAvatarUrl = aiAvatar?.imageUrl;
 
   const fetchSuggestions = useCallback(async (knowledgeContent: string) => {
     if (messages.length > 0) return;
@@ -75,12 +72,13 @@ export default function ChatClient() {
             operation: 'list',
           });
           errorEmitter.emit('permission-error', permissionError);
+        } else {
+           toast({
+            title: 'Error de Conocimiento',
+            description: 'No se pudo cargar la base de conocimiento.',
+            variant: 'destructive',
+          });
         }
-        toast({
-          title: 'Error de Conocimiento',
-          description: 'No se pudo cargar la base de conocimiento.',
-          variant: 'destructive',
-        });
       } finally {
         setIsLoading(false);
       }
@@ -123,8 +121,6 @@ export default function ChatClient() {
     }
   };
 
-  const aiAvatarUrl = appConfig?.aiAvatarUrl;
-
   return (
     <div className="flex h-screen flex-col bg-background">
       <AuthChatHeader />
@@ -166,5 +162,3 @@ export default function ChatClient() {
     </div>
   );
 }
-
-    

@@ -1,8 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
 
 const DefaultLogo = (props: React.SVGProps<SVGSVGElement>) => (
     <svg
@@ -17,30 +15,5 @@ const DefaultLogo = (props: React.SVGProps<SVGSVGElement>) => (
   );
 
 export const Logo = (props: React.SVGProps<SVGSVGElement>) => {
-    const firestore = useFirestore();
-
-    const configRef = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return doc(firestore, 'config', 'app-settings');
-    }, [firestore]);
-
-    const { data: appConfig } = useDoc<{ appLogoUrl: string }>(configRef);
-
-    if (appConfig?.appLogoUrl) {
-        return (
-            <Image
-                src={appConfig.appLogoUrl}
-                alt="App Logo"
-                width={48}
-                height={48}
-                className={props.className}
-                style={{
-                    width: props.width || 'auto',
-                    height: props.height || 'auto',
-                }}
-            />
-        )
-    }
-
     return <DefaultLogo {...props} />;
 };
