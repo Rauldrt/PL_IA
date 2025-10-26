@@ -19,13 +19,13 @@ function ChatPageContent() {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen flex-col bg-background">
+      <div className="relative flex h-screen w-full flex-col overflow-hidden">
         <AuthChatHeader />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar>
             <ChatHistory userId={user.uid} onSelectSession={setActiveSessionId} activeSessionId={activeSessionId} />
           </Sidebar>
-          <SidebarInset className="max-w-full">
+          <SidebarInset>
              <ChatClient userId={user.uid} sessionId={activeSessionId} setSessionId={setActiveSessionId} />
           </SidebarInset>
         </div>
@@ -42,4 +42,3 @@ export default function ChatPage() {
     </AuthGuard>
   );
 }
-

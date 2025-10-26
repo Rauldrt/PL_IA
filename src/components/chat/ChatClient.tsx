@@ -203,52 +203,51 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
   const hasMessages = messages && messages.length > 0;
   const showWelcome = !sessionId && !hasMessages && !isLoadingInitialData;
-  const showInput = !isLoadingInitialData || hasMessages;
-  const showMainLoader = isLoadingMessages && !!sessionId;
+  const showMainLoader = (isLoadingInitialData && !sessionId) || (isLoadingMessages && !!sessionId);
 
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <main className="flex-1 overflow-hidden">
-        <div className="relative h-full">
-          <ScrollArea className="h-full" ref={scrollAreaRef}>
-            <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-               {showMainLoader && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
+    <div className="flex h-full flex-col">
+      <div className="flex-1 overflow-y-auto">
+        <ScrollArea className="h-full" ref={scrollAreaRef}>
+          <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+            {showMainLoader && (
+              <div className="flex h-full items-center justify-center">
+                <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
 
-              {showWelcome && (
-                <WelcomeScreen
-                  suggestedMessages={suggested}
-                  onSuggestionClick={handleSendMessage}
-                  isLoading={isLoadingInitialData && !sessionId}
-                />
-              )}
+            {!showMainLoader && showWelcome && (
+              <WelcomeScreen
+                suggestedMessages={suggested}
+                onSuggestionClick={handleSendMessage}
+                isLoading={isLoadingInitialData && !sessionId}
+              />
+            )}
 
-              {hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
+            {!showMainLoader && hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
 
-              {isLoading && (
-                <div className="flex items-start gap-4 py-4 justify-start">
-                  <Avatar className="h-8 w-8 border">
-                    {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
-                    <AvatarFallback>IA</AvatarFallback>
-                  </Avatar>
-                  <div className="flex items-center space-x-2 rounded-lg bg-card px-4 py-3 text-sm shadow-sm">
-                    <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                    <span>Pensando...</span>
-                  </div>
+            {isLoading && (
+              <div className="flex items-start gap-4 py-4 justify-start">
+                <Avatar className="h-8 w-8 border">
+                  {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
+                  <AvatarFallback>IA</AvatarFallback>
+                </Avatar>
+                <div className="flex items-center space-x-2 rounded-lg bg-card px-4 py-3 text-sm shadow-sm">
+                  <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                  <span>Pensando...</span>
                 </div>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-      </main>
-      {showInput && (
-          <ChatInputForm
-            input={input}
-            setInput={setInput}
-            isLoading={isLoading}
-            handleSendMessage={handleSendMessage}
-          />
-      )}
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+      <ChatInputForm
+        input={input}
+        setInput={setInput}
+        isLoading={isLoading}
+        handleSendMessage={handleSendMessage}
+      />
     </div>
   );
 }
