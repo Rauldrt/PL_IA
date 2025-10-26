@@ -130,11 +130,10 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     setIsAiResponding(true);
 
     try {
-      const historyForAI = (messages || []).map(m => ({
-          role: m.role,
-          content: m.content
+      const historyForAI = messages.map(m => ({
+        role: m.role,
+        content: m.content,
       }));
-
       historyForAI.push(newUserMessage);
 
       const aiResponse = await chat({
@@ -206,13 +205,17 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
+    // Scroll to the bottom when messages change.
+    // The timeout gives React a moment to render the new message.
+    setTimeout(() => {
+      if (scrollAreaRef.current) {
+        const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
       }
-    }
-  }, [messages, isAiResponding]);
+    }, 0);
+  }, [messages]);
 
   const hasMessages = messages && messages.length > 0;
   const showWelcome = !sessionId && !hasMessages && !isLoadingInitialData;
