@@ -70,12 +70,14 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   }, [firestore, userId, setSessionId, toast]);
 
 
-  const saveMessage = async (message: Omit<Message, 'id'>) => {
-    if (!messagesCollectionRef) return;
-    const sessionDocRef = doc(firestore!, 'users', userId, 'sessions', sessionId!);
-    
+  const saveMessage = async (message: Omit<Message, 'id'>, currentSessionId: string) => {
+     if (!firestore || !userId || !currentSessionId) return;
+
+    const sessionDocRef = doc(firestore, 'users', userId, 'sessions', currentSessionId);
+    const messagesCollection = collection(firestore, 'users', userId, 'sessions', currentSessionId, 'messages');
+
     try {
-      await addDoc(messagesCollectionRef, {
+      await addDoc(messagesCollection, {
         ...message,
         timestamp: serverTimestamp(),
       });
@@ -84,7 +86,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     } catch (error: any) {
        if (error.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
-            path: messagesCollectionRef.path,
+            path: messagesCollection.path,
             operation: 'create',
             requestResourceData: message
           });
@@ -100,31 +102,36 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     const trimmedMessage = messageContent.trim();
     if (!trimmedMessage || isLoading) return;
 
+    setIsLoading(true);
     let currentSessionId = sessionId;
-    // We are starting a new chat
     if (!currentSessionId) {
-        currentSessionId = await createNewSession();
-        if (!currentSessionId) {
-            return; // Stop if session creation failed
+        const newSessionId = await createNewSession();
+        if (!newSessionId) {
+            setIsLoading(false);
+            return;
         }
+        currentSessionId = newSessionId;
     }
-    
+
     const userMessages = messages || [];
     const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
-    await saveMessage(newUserMessage);
-    
+    await saveMessage(newUserMessage, currentSessionId);
+
     setInput('');
-    setIsLoading(true);
 
     try {
+      // Use a slightly delayed history to ensure the new user message is available for the query
+      // This is a pragmatic workaround for the delay in Firestore's real-time updates.
+      const historyForAI = [...userMessages.map(({ id, ...rest }) => rest), newUserMessage];
+
       const aiResponse = await chat({
-        history: userMessages.slice(-10).map(({ id, ...rest }) => rest), // Pass history without IDs
+        history: historyForAI.slice(-10),
         message: trimmedMessage,
         knowledge: knowledge,
       });
 
       const newAiMessage: Omit<Message, 'id'> = { role: 'assistant', content: aiResponse.response };
-      await saveMessage(newAiMessage);
+      await saveMessage(newAiMessage, currentSessionId);
 
     } catch (e) {
       console.error('Chat error:', e);
@@ -133,7 +140,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
       setIsLoading(false);
     }
   };
-  
+
   // --- Effects ---
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -153,7 +160,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
                   allContent += doc.data().content + '\n\n';
               });
               setKnowledge(allContent);
-              
+
               // Fetch suggestions based on the knowledge
               const result = await getSuggestedMessages({ knowledge: allContent });
               if (result.messages) {
@@ -195,9 +202,9 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   }, [messages, isLoading]);
 
   const hasMessages = messages && messages.length > 0;
-  // Show welcome screen if this is a new chat, there are no messages, and initial data is loaded
   const showWelcome = !sessionId && !hasMessages && !isLoadingInitialData;
-  const showInput = !isLoadingInitialData;
+  const showInput = !isLoadingInitialData || hasMessages;
+  const showMainLoader = isLoadingMessages && !!sessionId;
 
 
   return (
@@ -206,19 +213,19 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         <div className="relative h-full">
           <ScrollArea className="h-full" ref={scrollAreaRef}>
             <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
-               {(isLoadingMessages || (isLoadingInitialData && !sessionId)) && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
+               {showMainLoader && <div className="flex justify-center items-center h-full"><LoaderCircle className="h-8 w-8 animate-spin text-primary" /></div>}
 
               {showWelcome && (
                 <WelcomeScreen
                   suggestedMessages={suggested}
                   onSuggestionClick={handleSendMessage}
-                  isLoading={false} // Loading is handled by the main loader now
+                  isLoading={isLoadingInitialData && !sessionId}
                 />
               )}
-              
+
               {hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
 
-              {isLoading && ( // This is for AI "thinking" animation
+              {isLoading && (
                 <div className="flex items-start gap-4 py-4 justify-start">
                   <Avatar className="h-8 w-8 border">
                     {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
@@ -238,7 +245,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
           <ChatInputForm
             input={input}
             setInput={setInput}
-            isLoading={isLoading} // The input is disabled only when AI is responding
+            isLoading={isLoading}
             handleSendMessage={handleSendMessage}
           />
       )}
