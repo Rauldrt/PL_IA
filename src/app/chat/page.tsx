@@ -19,7 +19,7 @@ function ChatPageContent() {
 
   return (
     <SidebarProvider>
-      <div className="relative flex h-screen w-full flex-col overflow-hidden">
+      <div className="relative flex h-screen w-full flex-col">
         <AuthChatHeader />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar>

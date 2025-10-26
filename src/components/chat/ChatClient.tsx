@@ -26,7 +26,7 @@ interface ChatClientProps {
 
 export default function ChatClient({ userId, sessionId, setSessionId }: ChatClientProps) {
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Only for AI response loading
+  const [isLoading, setIsLoading] = useState(false); // For AI response loading
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true); // For suggestions and knowledge
   const [suggested, setSuggested] = useState<string[]>([]);
   const [knowledge, setKnowledge] = useState('');
@@ -208,8 +208,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-y-auto">
-        <ScrollArea className="h-full" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
           <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
             {showMainLoader && (
               <div className="flex h-full items-center justify-center">
@@ -241,7 +240,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
             )}
           </div>
         </ScrollArea>
-      </div>
       <ChatInputForm
         input={input}
         setInput={setInput}
