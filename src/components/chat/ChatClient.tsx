@@ -146,11 +146,12 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     setIsAiResponding(true);
 
     try {
-      const historyForAI = [...(messages || []), newUserMessage].map(m => ({
+      const historyForAI = (messages || []).map(m => ({
           role: m.role,
           content: m.content
       }));
 
+      historyForAI.push(newUserMessage);
 
       const aiResponse = await chat({
         history: historyForAI.slice(-10),
