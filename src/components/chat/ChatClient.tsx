@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getSuggestedMessages } from '@/ai/flows/suggested-messages';
 import { chat } from '@/ai/flows/chat';
@@ -13,7 +13,7 @@ import { WelcomeScreen } from './WelcomeScreen';
 import { LoaderCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, doc, addDoc, serverTimestamp, orderBy, setDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, addDoc, serverTimestamp, orderBy, setDoc } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -37,7 +37,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar');
   const aiAvatarUrl = aiAvatar?.imageUrl;
 
-  // --- Firestore references ---
   const messagesCollectionRef = useMemoFirebase(() => {
     if (!firestore || !userId || !sessionId) return null;
     return collection(firestore, 'users', userId, 'sessions', sessionId, 'messages');
@@ -48,10 +47,8 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     return query(messagesCollectionRef, orderBy('timestamp', 'asc'));
   }, [messagesCollectionRef]);
 
-  // --- Data hooks ---
   const { data: messages = [], isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
 
-  // --- Functions ---
   const createNewSession = (): Promise<string | null> => {
     return new Promise((resolve) => {
         if (!firestore || !userId) {
@@ -61,10 +58,11 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         }
 
         const sessionsCollection = collection(firestore, 'users', userId, 'sessions');
-        addDoc(sessionsCollection, {
+        const sessionData = {
             startTime: serverTimestamp(),
             userId: userId,
-        })
+        };
+        addDoc(sessionsCollection, sessionData)
         .then(newSessionDoc => {
             setSessionId(newSessionDoc.id);
             resolve(newSessionDoc.id);
@@ -86,7 +84,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     });
   };
 
-
   const saveMessage = (message: Omit<Message, 'id'>, currentSessionId: string) => {
      if (!firestore || !userId || !currentSessionId) return;
 
@@ -104,7 +101,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
                 const permissionError = new FirestorePermissionError({
                     path: messagesCollection.path,
                     operation: 'create',
-                    requestResourceData: message,
+                    requestResourceData: messageData,
                 });
                 errorEmitter.emit('permission-error', permissionError);
             } else {
@@ -113,18 +110,18 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
             }
         });
     
-    setDoc(sessionDocRef, { lastMessage: message.content.substring(0, 40) }, { merge: true })
+    const sessionUpdateData = { lastMessage: message.content.substring(0, 40) };
+    setDoc(sessionDocRef, sessionUpdateData, { merge: true })
         .catch(serverError => {
              if (serverError.code === 'permission-denied') {
                 const permissionError = new FirestorePermissionError({
                     path: sessionDocRef.path,
                     operation: 'update',
-                    requestResourceData: { lastMessage: message.content.substring(0, 40) },
+                    requestResourceData: sessionUpdateData,
                 });
                 errorEmitter.emit('permission-error', permissionError);
             } else {
                 console.error("Error updating session:", serverError);
-                // We don't toast here as the primary action (saving message) might have succeeded
             }
         });
   };
@@ -142,15 +139,14 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         currentSessionId = newSessionId;
     }
 
-    const userMessages = messages || [];
-    const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
+    const newUserMessage: Omit<Message, 'id' | 'timestamp'> = { role: 'user', content: trimmedMessage };
     saveMessage(newUserMessage, currentSessionId);
 
     setInput('');
     setIsAiResponding(true);
 
     try {
-      const historyForAI = [...userMessages, newUserMessage].map(m => ({
+      const historyForAI = [...(messages || []), newUserMessage].map(m => ({
           role: m.role,
           content: m.content
       }));
@@ -162,7 +158,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         knowledge: knowledge,
       });
 
-      const newAiMessage: Omit<Message, 'id'> = { role: 'assistant', content: aiResponse.response };
+      const newAiMessage: Omit<Message, 'id' | 'timestamp'> = { role: 'assistant', content: aiResponse.response };
       saveMessage(newAiMessage, currentSessionId);
 
     } catch (e) {
@@ -173,7 +169,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     }
   };
 
-  // --- Effects ---
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!firestore) {
