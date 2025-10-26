@@ -24,7 +24,7 @@ export default function ChatInputForm({
 
   return (
     <footer className="sticky bottom-0 border-t bg-background">
-      <div className="mx-auto w-full max-w-3xl px-4 py-3">
+      <div className="w-full px-4 py-3">
         <form onSubmit={handleSubmit} className="relative">
           <Textarea
             value={input}
