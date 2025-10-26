@@ -15,19 +15,19 @@ const ChatInputSchema = z.object({
   sentiment: z.string().optional().describe('The sentiment of the user\'s message.'),
   knowledge: z.string().optional().describe('Aditional knowledge for the AI agent to use.'),
 });
-type ChatInput = z.infer<typeof ChatInputSchema>;
+export type ChatInput = z.infer<typeof ChatInputSchema>;
 
 const ChatOutputSchema = z.object({
   response: z.string().describe('The AI\'s response.'),
 });
-type ChatOutput = z.infer<typeof ChatOutputSchema>;
+export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
-export async function chat(input: ChatInput): Promise<ChatOutput> {
-  const prompt = ai.definePrompt({
-    name: 'chatPrompt',
-    input: { schema: ChatInputSchema },
-    output: { schema: ChatOutputSchema },
-    prompt: `Eres un agente de IA experto llamado PLib_IA. Tu propósito es ayudar a los usuarios con sus consultas.
+
+const chatPrompt = ai.definePrompt({
+  name: 'chatPrompt',
+  input: { schema: ChatInputSchema },
+  output: { schema: ChatOutputSchema },
+  prompt: `Eres un agente de IA experto llamado PLib_IA. Tu propósito es ayudar a los usuarios con sus consultas.
 
   Responde basándote únicamente en el siguiente contexto y base de conocimiento:
   {{{knowledge}}}
@@ -45,27 +45,29 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
 
   Responde al usuario en español. Mantén tus respuestas concisas y útiles.
   `,
-  });
+});
 
-  const chatFlow = ai.defineFlow(
-    {
-      name: 'chatFlow',
-      inputSchema: ChatInputSchema,
-      outputSchema: ChatOutputSchema,
-    },
-    async (input) => {
-      const { output } = await prompt(input);
-      
-      // Update session's last message after getting a response.
-      // Add a defensive check to ensure firebase context exists.
-      if (ai.internal.state().flow?.context?.firebase?.sessionDocRef) {
-        const sessionRef = ai.internal.state().flow!.context.firebase.sessionDocRef;
-        const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
-        await sessionRef.update({ lastMessage: userMessage });
-      }
-
-      return output!;
+const chatFlow = ai.defineFlow(
+  {
+    name: 'chatFlow',
+    inputSchema: ChatInputSchema,
+    outputSchema: ChatOutputSchema,
+  },
+  async (input) => {
+    const { output } = await chatPrompt(input);
+    
+    // Update session's last message after getting a response.
+    // Add a defensive check to ensure firebase context exists.
+    if (ai.internal.state().flow?.context?.firebase?.sessionDocRef) {
+      const sessionRef = ai.internal.state().flow!.context.firebase.sessionDocRef;
+      const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
+      await sessionRef.update({ lastMessage: userMessage });
     }
-  );
+
+    return output!;
+  }
+);
+
+export async function chat(input: ChatInput): Promise<ChatOutput> {
   return chatFlow(input);
 }
