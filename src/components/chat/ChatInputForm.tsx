@@ -23,7 +23,7 @@ export default function ChatInputForm({
   };
 
   return (
-    <footer className="border-t bg-background">
+    <footer className="sticky bottom-0 border-t bg-background">
       <div className="mx-auto max-w-3xl p-4">
         <form onSubmit={handleSubmit} className="relative">
           <Textarea
