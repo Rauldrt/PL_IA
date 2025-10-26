@@ -16,6 +16,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { useIsAdmin } from '@/hooks/use-is-admin';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 
 interface Fiscal {
@@ -266,7 +267,9 @@ function FiscalesPageContent() {
 export default function FiscalesPage() {
     return (
         <AuthGuard>
-            <FiscalesPageContent />
+            <SidebarProvider>
+                <FiscalesPageContent />
+            </SidebarProvider>
         </AuthGuard>
     );
 }

@@ -17,6 +17,7 @@ import { collection, writeBatch, doc } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 interface Fiscal {
     id?: string;
@@ -354,7 +355,9 @@ function CargarFiscalesPageContent() {
 export default function CargarFiscalesPage() {
     return (
         <AdminGuard>
-            <CargarFiscalesPageContent />
+            <SidebarProvider>
+                <CargarFiscalesPageContent />
+            </SidebarProvider>
         </AdminGuard>
     );
 }
