@@ -3,6 +3,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { updateSession } from '../tools/update-session';
 
 const MessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -14,6 +15,7 @@ const ChatInputSchema = z.object({
   message: z.string().describe('The latest user message.'),
   sentiment: z.string().optional().describe('The sentiment of the user\'s message.'),
   knowledge: z.string().optional().describe('Aditional knowledge for the AI agent to use.'),
+  sessionId: z.string().describe('The current session ID.'),
 });
 export type ChatInput = z.infer<typeof ChatInputSchema>;
 
@@ -57,12 +59,8 @@ const chatFlow = ai.defineFlow(
     const { output } = await chatPrompt(input);
     
     // Update session's last message after getting a response.
-    // Add a defensive check to ensure firebase context exists.
-    if (ai.internal.state().flow?.context?.firebase?.sessionDocRef) {
-      const sessionRef = ai.internal.state().flow!.context.firebase.sessionDocRef;
-      const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
-      await sessionRef.update({ lastMessage: userMessage });
-    }
+    const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
+    await updateSession({ sessionId: input.sessionId, lastMessage: userMessage });
 
     return output!;
   }

@@ -87,7 +87,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   const saveMessage = (message: Omit<Message, 'id'>, currentSessionId: string) => {
      if (!firestore || !userId || !currentSessionId) return;
 
-    const sessionDocRef = doc(firestore, 'users', userId, 'sessions', currentSessionId);
     const messagesCollection = collection(firestore, 'users', userId, 'sessions', currentSessionId, 'messages');
 
     const messageData = {
@@ -107,21 +106,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
             } else {
                 console.error("Error saving message:", serverError);
                 toast({ title: 'Error', description: 'No se pudo guardar el mensaje.', variant: 'destructive'});
-            }
-        });
-    
-    const sessionUpdateData = { lastMessage: message.content.substring(0, 40) };
-    setDoc(sessionDocRef, sessionUpdateData, { merge: true })
-        .catch(serverError => {
-             if (serverError.code === 'permission-denied') {
-                const permissionError = new FirestorePermissionError({
-                    path: sessionDocRef.path,
-                    operation: 'update',
-                    requestResourceData: sessionUpdateData,
-                });
-                errorEmitter.emit('permission-error', permissionError);
-            } else {
-                console.error("Error updating session:", serverError);
             }
         });
   };
@@ -157,6 +141,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
         history: historyForAI.slice(-10),
         message: trimmedMessage,
         knowledge: knowledge,
+        sessionId: currentSessionId,
       });
 
       const newAiMessage: Omit<Message, 'id' | 'timestamp'> = { role: 'assistant', content: aiResponse.response };
