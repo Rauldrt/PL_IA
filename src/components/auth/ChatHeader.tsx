@@ -8,12 +8,14 @@ import { Logo } from '@/components/icons';
 import { useAuth, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useIsAdmin } from '@/hooks/use-is-admin';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 
 export default function AuthChatHeader() {
   const router = useRouter();
   const auth = useAuth();
   const { user } = useUser();
   const { isAdmin, isLoading: isAdminLoading } = useIsAdmin(user?.uid);
+  const { isMobile } = useSidebar();
 
 
   const handleLogout = async () => {
@@ -25,10 +27,13 @@ export default function AuthChatHeader() {
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 sm:px-6">
-      <Link href="/chat" className="flex items-center gap-2 sm:gap-3">
-        <Logo width={40} height={40} />
-        <h1 className="font-headline text-lg sm:text-xl font-bold text-foreground">PLib_IA</h1>
-      </Link>
+      <div className="flex items-center gap-2 sm:gap-3">
+        {isMobile && <SidebarTrigger />}
+        <Link href="/chat" className="flex items-center gap-2 sm:gap-3">
+          <Logo width={40} height={40} />
+          <h1 className="font-headline text-lg sm:text-xl font-bold text-foreground">PLib_IA</h1>
+        </Link>
+      </div>
       <div className="flex items-center gap-2 sm:gap-4">
         <Link href="/fiscales" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
             <Briefcase size={16} /> <span className="hidden sm:inline">Fiscales</span>
