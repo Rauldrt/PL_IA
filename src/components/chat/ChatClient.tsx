@@ -52,50 +52,81 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
   const { data: messages = [], isLoading: isLoadingMessages } = useCollection<Message>(messagesQuery);
 
   // --- Functions ---
-  const createNewSession = useCallback(async () => {
-    if (!firestore || !userId) return null;
-    try {
+  const createNewSession = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+        if (!firestore || !userId) {
+            toast({ title: 'Error', description: 'No se pudo iniciar una nueva sesión de chat.', variant: 'destructive'});
+            resolve(null);
+            return;
+        }
+
         const sessionsCollection = collection(firestore, 'users', userId, 'sessions');
-        const newSessionDoc = await addDoc(sessionsCollection, {
+        addDoc(sessionsCollection, {
             startTime: serverTimestamp(),
             userId: userId,
+        })
+        .then(newSessionDoc => {
+            setSessionId(newSessionDoc.id);
+            resolve(newSessionDoc.id);
+        })
+        .catch(serverError => {
+            if (serverError.code === 'permission-denied') {
+                const permissionError = new FirestorePermissionError({
+                    path: sessionsCollection.path,
+                    operation: 'create',
+                    requestResourceData: { startTime: new Date(), userId },
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } else {
+                console.error("Error creating new session:", serverError);
+                toast({ title: 'Error', description: 'No se pudo iniciar una nueva sesión de chat.', variant: 'destructive'});
+            }
+            resolve(null);
         });
-        setSessionId(newSessionDoc.id);
-        return newSessionDoc.id;
-    } catch (error) {
-        console.error("Error creating new session:", error);
-        toast({ title: 'Error', description: 'No se pudo iniciar una nueva sesión de chat.', variant: 'destructive'});
-        return null;
-    }
-  }, [firestore, userId, setSessionId, toast]);
+    });
+  };
 
 
-  const saveMessage = async (message: Omit<Message, 'id'>, currentSessionId: string) => {
+  const saveMessage = (message: Omit<Message, 'id'>, currentSessionId: string) => {
      if (!firestore || !userId || !currentSessionId) return;
 
     const sessionDocRef = doc(firestore, 'users', userId, 'sessions', currentSessionId);
     const messagesCollection = collection(firestore, 'users', userId, 'sessions', currentSessionId, 'messages');
 
-    try {
-      await addDoc(messagesCollection, {
+    const messageData = {
         ...message,
         timestamp: serverTimestamp(),
-      });
-       await setDoc(sessionDocRef, { lastMessage: message.content.substring(0, 40) }, { merge: true });
+      };
 
-    } catch (error: any) {
-       if (error.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: messagesCollection.path,
-            operation: 'create',
-            requestResourceData: message
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        } else {
-            console.error("Error saving message:", error);
-            toast({ title: 'Error', description: 'No se pudo guardar el mensaje.', variant: 'destructive'});
-        }
-    }
+    addDoc(messagesCollection, messageData)
+        .catch(serverError => {
+            if (serverError.code === 'permission-denied') {
+                const permissionError = new FirestorePermissionError({
+                    path: messagesCollection.path,
+                    operation: 'create',
+                    requestResourceData: message,
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } else {
+                console.error("Error saving message:", serverError);
+                toast({ title: 'Error', description: 'No se pudo guardar el mensaje.', variant: 'destructive'});
+            }
+        });
+    
+    setDoc(sessionDocRef, { lastMessage: message.content.substring(0, 40) }, { merge: true })
+        .catch(serverError => {
+             if (serverError.code === 'permission-denied') {
+                const permissionError = new FirestorePermissionError({
+                    path: sessionDocRef.path,
+                    operation: 'update',
+                    requestResourceData: { lastMessage: message.content.substring(0, 40) },
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } else {
+                console.error("Error updating session:", serverError);
+                // We don't toast here as the primary action (saving message) might have succeeded
+            }
+        });
   };
 
   const handleSendMessage = async (messageContent: string) => {
@@ -113,7 +144,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
     const userMessages = messages || [];
     const newUserMessage: Omit<Message, 'id'> = { role: 'user', content: trimmedMessage };
-    await saveMessage(newUserMessage, currentSessionId);
+    saveMessage(newUserMessage, currentSessionId);
 
     setInput('');
     setIsAiResponding(true);
@@ -128,7 +159,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
       });
 
       const newAiMessage: Omit<Message, 'id'> = { role: 'assistant', content: aiResponse.response };
-      await saveMessage(newAiMessage, currentSessionId);
+      saveMessage(newAiMessage, currentSessionId);
 
     } catch (e) {
       console.error('Chat error:', e);
@@ -205,7 +236,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
   return (
     <div className="flex h-full flex-col">
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
+       <ScrollArea className="flex-1" ref={scrollAreaRef}>
           <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
             {showMainLoader && (
               <div className="flex h-full items-center justify-center">
@@ -246,3 +277,5 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     </div>
   );
 }
+
+    
