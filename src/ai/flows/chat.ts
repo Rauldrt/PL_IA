@@ -57,6 +57,7 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
       const { output } = await prompt(input);
       
       // Update session's last message after getting a response.
+      // Add a defensive check to ensure firebase context exists.
       if (ai.internal.state().flow?.context?.firebase?.sessionDocRef) {
         const sessionRef = ai.internal.state().flow!.context.firebase.sessionDocRef;
         const userMessage = input.message.length > 40 ? input.message.substring(0, 40) + '...' : input.message;
