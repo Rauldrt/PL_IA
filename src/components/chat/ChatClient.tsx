@@ -130,7 +130,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     setIsAiResponding(true);
 
     try {
-      const historyForAI = messages.map(m => ({
+      const historyForAI = (messages || []).map(m => ({
         role: m.role,
         content: m.content,
       }));
