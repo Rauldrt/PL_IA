@@ -26,8 +26,8 @@ interface ChatClientProps {
 
 export default function ChatClient({ userId, sessionId, setSessionId }: ChatClientProps) {
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // For AI response loading
-  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true); // For suggestions and knowledge
+  const [isAiResponding, setIsAiResponding] = useState(false);
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true);
   const [suggested, setSuggested] = useState<string[]>([]);
   const [knowledge, setKnowledge] = useState('');
   const { toast } = useToast();
@@ -100,14 +100,12 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
 
   const handleSendMessage = async (messageContent: string) => {
     const trimmedMessage = messageContent.trim();
-    if (!trimmedMessage || isLoading) return;
+    if (!trimmedMessage || isAiResponding) return;
 
-    setIsLoading(true);
     let currentSessionId = sessionId;
     if (!currentSessionId) {
         const newSessionId = await createNewSession();
         if (!newSessionId) {
-            setIsLoading(false);
             return;
         }
         currentSessionId = newSessionId;
@@ -118,10 +116,9 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     await saveMessage(newUserMessage, currentSessionId);
 
     setInput('');
+    setIsAiResponding(true);
 
     try {
-      // Use a slightly delayed history to ensure the new user message is available for the query
-      // This is a pragmatic workaround for the delay in Firestore's real-time updates.
       const historyForAI = [...userMessages.map(({ id, ...rest }) => rest), newUserMessage];
 
       const aiResponse = await chat({
@@ -137,7 +134,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
       console.error('Chat error:', e);
       toast({ title: 'Error', description: 'Ocurrió un error inesperado.', variant: 'destructive' });
     } finally {
-      setIsLoading(false);
+      setIsAiResponding(false);
     }
   };
 
@@ -149,7 +146,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
          return;
       };
 
-      // Only fetch if it's a new chat (no sessionId)
       if (!sessionId) {
           setIsLoadingInitialData(true);
           try {
@@ -161,7 +157,6 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
               });
               setKnowledge(allContent);
 
-              // Fetch suggestions based on the knowledge
               const result = await getSuggestedMessages({ knowledge: allContent });
               if (result.messages) {
                   setSuggested(result.messages);
@@ -185,9 +180,8 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
               setIsLoadingInitialData(false);
           }
       } else {
-        // It's an existing chat, so no initial data to load
         setIsLoadingInitialData(false);
-        setSuggested([]); // Clear suggestions for existing chats
+        setSuggested([]); 
       }
     };
 
@@ -199,7 +193,7 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages, isAiResponding]);
 
   const hasMessages = messages && messages.length > 0;
   const showWelcome = !sessionId && !hasMessages && !isLoadingInitialData;
@@ -220,13 +214,13 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
               <WelcomeScreen
                 suggestedMessages={suggested}
                 onSuggestionClick={handleSendMessage}
-                isLoading={isLoadingInitialData && !sessionId}
+                isLoading={isLoadingInitialData}
               />
             )}
 
             {!showMainLoader && hasMessages && messages.map((m) => <MessageBubble key={m.id} message={m} aiAvatarUrl={aiAvatarUrl} />)}
 
-            {isLoading && (
+            {isAiResponding && (
               <div className="flex items-start gap-4 py-4 justify-start">
                 <Avatar className="h-8 w-8 border">
                   {aiAvatarUrl && <AvatarImage src={aiAvatarUrl} alt="AI Avatar" />}
@@ -243,9 +237,10 @@ export default function ChatClient({ userId, sessionId, setSessionId }: ChatClie
       <ChatInputForm
         input={input}
         setInput={setInput}
-        isLoading={isLoading}
+        isLoading={isAiResponding}
         handleSendMessage={handleSendMessage}
       />
     </div>
   );
 }
+
